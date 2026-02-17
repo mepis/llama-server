@@ -1,0 +1,522 @@
+#!/bin/bash
+
+# Llama.cpp Launch Script
+# This script launches Llama.cpp server with various configuration options
+
+set -e
+
+# Color output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Configuration
+CONFIG_DIR="${CONFIG_DIR:-/opt/llama-cpp/config}"
+MODELS_DIR="${MODELS_DIR:-/opt/llama-cpp/models}"
+LOG_DIR="${LOG_DIR:-/opt/llama-cpp/logs}"
+PID_FILE="${PID_FILE:-/tmp/llama-server.pid}"
+PORT="${PORT:-8080}"
+HOST="${HOST:-0.0.0.0}"
+
+# Functions
+log() {
+    echo -e "${GREEN}[INFO]${NC} $1" | tee -a "$LOG_FILE" 2>/dev/null || echo "$1"
+}
+
+error() {
+    echo -e "${RED}[ERROR]${NC} $1" >&2
+    exit 1
+}
+
+warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+parse_arguments() {
+    # Parse command line arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --help)
+                show_help
+                exit 0
+                ;;
+            --model|-m)
+                MODEL_PATH="$2"
+                shift 2
+                ;;
+            --config|-c)
+                CONFIG_FILE="$2"
+                shift 2
+                ;;
+            --port|-p)
+                PORT="$2"
+                shift 2
+                ;;
+            --host|-H)
+                HOST="$2"
+                shift 2
+                ;;
+            --ngl)
+                NGL="$2"
+                shift 2
+                ;;
+            --threads)
+                THREADS="$2"
+                shift 2
+                ;;
+            --context|-C)
+                CONTEXT_SIZE="$2"
+                shift 2
+                ;;
+            --batch-size)
+                BATCH_SIZE="$2"
+                shift 2
+                ;;
+            --log-level)
+                LOG_LEVEL="$2"
+                shift 2
+                ;;
+            --unified-memory|-um)
+                UNIFIED_MEMORY=1
+                shift
+                ;;
+            --hf|-huggingface)
+                MODEL_NAME="$2"
+                shift 2
+                ;;
+            --download-only|-d)
+                DOWNLOAD_ONLY=1
+                shift
+                ;;
+            --daemon|-D)
+                DAEMON=1
+                shift
+                ;;
+            --background|-b)
+                BACKGROUND=1
+                shift
+                ;;
+            --no-gpu|-ng)
+                NO_GPU=1
+                shift
+                ;;
+            --list-devices|-l)
+                LIST_DEVICES=1
+                shift
+                ;;
+            --version|-v)
+                VERSION=1
+                shift
+                ;;
+            *)
+                error "Unknown option: $1"
+                ;;
+        esac
+    done
+}
+
+show_help() {
+    echo "=========================================="
+    echo "  Llama.cpp Server Launcher"
+    echo "=========================================="
+    echo ""
+    echo "Usage: llama-server [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  --model, -m PATH       Path to the model file"
+    echo "  --config, -c FILE      Path to configuration file"
+    echo "  --port, -p PORT        Port to listen on (default: 8080)"
+    echo "  --host, -H HOST        Host to bind to (default: 0.0.0.0)"
+    echo "  --ngl NUM              Number of GPU layers to offload (default: 99)"
+    echo "  --threads NUM          Number of threads (default: $(nproc))"
+    echo "  --context, -C SIZE     Context size (default: 2048)"
+    echo "  --batch-size SIZE      Batch size (default: 512)"
+    echo "  --log-level LEVEL      Log level (info, warning, error, debug)"
+    echo "  --unified-memory, -um  Enable CUDA unified memory"
+    echo "  --hf, -huggingface NAME Download model from HuggingFace"
+    echo "  --download-only, -d   Only download model, don't start server"
+    echo "  --daemon, -D           Run as daemon (background process)"
+    echo "  --background, -b      Run in background (alternative to --daemon)"
+    echo "  --no-gpu, -ng          Disable GPU acceleration"
+    echo "  --list-devices, -l    List available devices"
+    echo "  --version, -v         Show version information"
+    echo "  --help, -h             Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  llama-server --model /opt/llama-cpp/models/model.gguf --ngl 99"
+    echo "  llama-server --hf meta-llama/Llama-2-7b-chat-hf --port 8081"
+    echo "  llama-server --config /opt/llama-cpp/config/server.yaml --daemon"
+    echo ""
+}
+
+check_model() {
+    if [ -z "$MODEL_PATH" ]; then
+        # Try to find model from config
+        if [ -n "$CONFIG_FILE" ] && [ -f "$CONFIG_FILE" ]; then
+            MODEL_PATH=$(grep -oP "model_file: '\K[^']+" "$CONFIG_FILE" || true)
+        fi
+    fi
+
+    # Check if model exists
+    if [ -z "$MODEL_PATH" ]; then
+        warning "No model specified. Use --model or --hf to specify a model."
+        exit 1
+    fi
+
+    if [ ! -f "$MODEL_PATH" ]; then
+        error "Model file not found: $MODEL_PATH"
+        exit 1
+    fi
+
+    log "Using model: $MODEL_PATH"
+}
+
+download_model() {
+    if [ -z "$MODEL_NAME" ]; then
+        return
+    fi
+
+    info "Downloading model from HuggingFace: $MODEL_NAME"
+
+    # Create models directory if it doesn't exist
+    mkdir -p "$MODELS_DIR"
+
+    # Determine model file extension
+    case "$MODEL_NAME" in
+        *gguf*)
+            MODEL_FILE="$MODELS_DIR/$(basename $MODEL_NAME .gguf).gguf"
+            ;;
+        *)
+            MODEL_FILE="$MODELS_DIR/$MODEL_NAME.gguf"
+            ;;
+    esac
+
+    # Check if model already exists
+    if [ -f "$MODEL_FILE" ]; then
+        warning "Model already exists at $MODEL_FILE"
+        if [ -n "$DOWNLOAD_ONLY" ]; then
+            log "Download-only mode: model already exists, exiting"
+            exit 0
+        fi
+        MODEL_PATH="$MODEL_FILE"
+        return
+    fi
+
+    # Download model from HuggingFace
+    log "Downloading model to $MODEL_FILE"
+
+    # Try different download methods
+    if command -v wget &> /dev/null; then
+        wget -q --show-progress \
+            "https://huggingface.co/$MODEL_NAME/resolve/main/${MODEL_NAME##*/}.gguf" \
+            -O "$MODEL_FILE" 2>&1 | \
+            while read line; do
+                echo "$line" | grep -E "saved|downloaded|%" | tail -1
+            done
+    elif command -v curl &> /dev/null; then
+        curl -L -o "$MODEL_FILE" \
+            "https://huggingface.co/$MODEL_NAME/resolve/main/${MODEL_NAME##*/}.gguf" \
+            --progress-bar
+    else
+        error "Neither wget nor curl is available for downloading models"
+        exit 1
+    fi
+
+    if [ ! -f "$MODEL_FILE" ]; then
+        error "Failed to download model"
+        exit 1
+    fi
+
+    log "Model downloaded successfully to $MODEL_FILE"
+    MODEL_PATH="$MODEL_FILE"
+}
+
+check_dependencies() {
+    log "Checking dependencies..."
+
+    local missing_deps=()
+
+    if [ ! -f "/usr/local/bin/llama-server" ] && [ ! -f "/opt/llama-cpp/bin/llama-server" ]; then
+        missing_deps+=("llama-server binary")
+    fi
+
+    if [ -n "$NO_GPU" ]; then
+        log "GPU acceleration disabled"
+    else
+        # Check for GPU support
+        if command -v nvidia-smi &> /dev/null; then
+            log "Nvidia GPU detected"
+        fi
+        if command -v rocm-smi &> /dev/null; then
+            log "AMD GPU detected"
+        fi
+        if command -v vulkaninfo &> /dev/null; then
+            log "Vulkan GPU detected"
+        fi
+    fi
+
+    if [ ${#missing_deps[@]} -gt 0 ]; then
+        error "Missing dependencies: ${missing_deps[*]}"
+        exit 1
+    fi
+
+    log "Dependencies are satisfied"
+}
+
+check_port() {
+    if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null 2>&1; then
+        warning "Port $PORT is already in use"
+        read -p "Kill existing process on port $PORT? [y/N]: " kill_existing
+        if [[ "$kill_existing" =~ ^[Yy]$ ]]; then
+            lsof -t -i:$PORT | xargs kill -9 2>/dev/null || true
+            log "Existing process killed"
+        else
+            error "Port $PORT is in use. Please choose a different port or kill the existing process"
+            exit 1
+        fi
+    fi
+}
+
+list_devices() {
+    log "Available devices:"
+
+    if command -v nvidia-smi &> /dev/null; then
+        echo ""
+        echo "Nvidia GPUs:"
+        nvidia-smi --query-gpu=index,name,driver_version,memory.total --format=csv
+    fi
+
+    if command -v rocm-smi &> /dev/null; then
+        echo ""
+        echo "AMD GPUs:"
+        rocm-smi --showlibver
+    fi
+
+    if command -v vulkaninfo &> /dev/null; then
+        echo ""
+        echo "Vulkan GPUs:"
+        vulkaninfo --summary | grep -E "GPU name|deviceName"
+    fi
+
+    echo ""
+    echo "CPU: $(lscpu | grep 'Model name' | awk -F: '{print $2}' | xargs)"
+    exit 0
+}
+
+check_version() {
+    if [ -f "/usr/local/bin/llama-server" ]; then
+        llama_server="/usr/local/bin/llama-server"
+    elif [ -f "/opt/llama-cpp/bin/llama-server" ]; then
+        llama_server="/opt/llama-cpp/bin/llama-server"
+    else
+        llama_server=$(which llama-server)
+    fi
+
+    if [ -n "$llama_server" ]; then
+        version=$("$llama_server" --version 2>&1 | head -1 || echo "Unknown version")
+        log "Llama.cpp version: $version"
+    fi
+    exit 0
+}
+
+build_command() {
+    local cmd="llama-server"
+
+    # Check which binary to use
+    if [ -f "/usr/local/bin/llama-server" ]; then
+        cmd="/usr/local/bin/llama-server"
+    elif [ -f "/opt/llama-cpp/bin/llama-server" ]; then
+        cmd="/opt/llama-cpp/bin/llama-server"
+    fi
+
+    # Add arguments
+    if [ -n "$CONFIG_FILE" ] && [ -f "$CONFIG_FILE" ]; then
+        cmd="$cmd --config $CONFIG_FILE"
+    fi
+
+    if [ -n "$MODEL_PATH" ]; then
+        cmd="$cmd --model $MODEL_PATH"
+    fi
+
+    if [ -n "$PORT" ]; then
+        cmd="$cmd --port $PORT"
+    fi
+
+    if [ -n "$HOST" ]; then
+        cmd="$cmd --host $HOST"
+    fi
+
+    if [ -n "$NGL" ]; then
+        cmd="$cmd --ngl $NGL"
+    fi
+
+    if [ -n "$THREADS" ]; then
+        cmd="$cmd --threads $THREADS"
+    fi
+
+    if [ -n "$CONTEXT_SIZE" ]; then
+        cmd="$cmd --context-size $CONTEXT_SIZE"
+    fi
+
+    if [ -n "$BATCH_SIZE" ]; then
+        cmd="$cmd --batch-size $BATCH_SIZE"
+    fi
+
+    if [ -n "$LOG_LEVEL" ]; then
+        cmd="$cmd --log-level $LOG_LEVEL"
+    fi
+
+    if [ -n "$UNIFIED_MEMORY" ]; then
+        cmd="$cmd --unified-memory"
+    fi
+
+    if [ -n "$NO_GPU" ]; then
+        cmd="$cmd --n-gpu-layers 0"
+    fi
+
+    # Set environment variables
+    export GGML_LOG_LEVEL="${LOG_LEVEL:-info}"
+
+    if [ -n "$UNIFIED_MEMORY" ]; then
+        export GGML_CUDA_ENABLE_UNIFIED_MEMORY=1
+    fi
+
+    log "Command to execute:"
+    echo "$cmd"
+    echo ""
+
+    echo "$cmd"
+}
+
+execute_command() {
+    local cmd="$1"
+
+    # Create log directory
+    mkdir -p "$LOG_DIR"
+
+    # Set log file
+    local log_file="$LOG_DIR/llama-server-$(date +%Y%m%d_%H%M%S).log"
+
+    log "Starting server..."
+    log "Log file: $log_file"
+    log "PID: $$"
+
+    # Execute command
+    if [ "$DAEMON" = "1" ]; then
+        nohup $cmd > "$log_file" 2>&1 &
+        local pid=$!
+        echo $pid > "$PID_FILE"
+        log "Server started in daemon mode with PID: $pid"
+    elif [ "$BACKGROUND" = "1" ]; then
+        $cmd > "$log_file" 2>&1 &
+        local pid=$!
+        echo $pid > "$PID_FILE"
+        log "Server started in background with PID: $pid"
+    else
+        $cmd
+    fi
+}
+
+verify_server() {
+    if [ "$DAEMON" = "1" ] || [ "$BACKGROUND" = "1" ]; then
+        log "Waiting for server to start..."
+        sleep 2
+
+        if [ -f "$PID_FILE" ]; then
+            local pid=$(cat "$PID_FILE")
+            if ps -p $pid > /dev/null; then
+                log "Server is running with PID: $pid"
+                log "Access the server at: http://$HOST:$PORT"
+            else
+                warning "Server process died. Check logs at $log_file"
+            fi
+        else
+            warning "No PID file found. Check if server is running"
+        fi
+    fi
+}
+
+cleanup() {
+    if [ -f "$PID_FILE" ]; then
+        rm -f "$PID_FILE"
+    fi
+}
+
+# Main execution
+main() {
+    # Initialize variables
+    MODEL_PATH=""
+    CONFIG_FILE=""
+    NGL=""
+    THREADS=""
+    CONTEXT_SIZE=""
+    BATCH_SIZE=""
+    LOG_LEVEL=""
+    UNIFIED_MEMORY=""
+    MODEL_NAME=""
+    DOWNLOAD_ONLY=0
+    DAEMON=0
+    BACKGROUND=0
+    NO_GPU=0
+    LIST_DEVICES=0
+    VERSION=0
+    LOG_FILE="$LOG_DIR/llama-server-launch.log"
+
+    # Parse arguments
+    parse_arguments "$@"
+
+    # Show help if requested
+    if [ "$VERSION" = "1" ]; then
+        check_version
+    fi
+
+    # Show help if no arguments
+    if [ $# -eq 0 ]; then
+        show_help
+        exit 0
+    fi
+
+    # List devices if requested
+    if [ "$LIST_DEVICES" = "1" ]; then
+        list_devices
+    fi
+
+    # Check dependencies
+    check_dependencies
+
+    # Check model
+    check_model
+
+    # Download model if specified
+    download_model
+
+    # Check port
+    check_port
+
+    # Build command
+    local cmd=$(build_command)
+
+    # Execute command
+    execute_command "$cmd"
+
+    # Verify server
+    verify_server
+
+    # Cleanup
+    cleanup
+
+    # Exit
+    if [ "$DOWNLOAD_ONLY" = "1" ]; then
+        log "Download-only mode: exiting"
+        exit 0
+    fi
+}
+
+# Run main function
+main "$@"
