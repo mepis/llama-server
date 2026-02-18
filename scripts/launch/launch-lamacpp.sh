@@ -156,6 +156,12 @@ show_help() {
 }
 
 check_model() {
+    # If using -hf flag, the model will be downloaded by llama-server itself
+    if [ -n "$MODEL_NAME" ] && [ -z "$MODEL_PATH" ]; then
+        log "HuggingFace model specified: $MODEL_NAME (will be downloaded by llama-server)"
+        return 0
+    fi
+
     if [ -z "$MODEL_PATH" ]; then
         # Try to find model from config
         if [ -n "$CONFIG_FILE" ] && [ -f "$CONFIG_FILE" ]; then
@@ -165,13 +171,12 @@ check_model() {
 
     # Check if model exists
     if [ -z "$MODEL_PATH" ]; then
-        warning "No model specified. Use --model or --hf to specify a model."
+        warning "No model specified. Use --model /path/to/model.gguf or --hf owner/repo to specify a model."
         exit 1
     fi
 
     if [ ! -f "$MODEL_PATH" ]; then
         error "Model file not found: $MODEL_PATH"
-        exit 1
     fi
 
     log "Using model: $MODEL_PATH"
@@ -190,7 +195,7 @@ download_model() {
     # Determine model file extension
     case "$MODEL_NAME" in
         *gguf*)
-            MODEL_FILE="$MODELS_DIR/$(basename $MODEL_NAME .gguf).gguf"
+            MODEL_FILE="$MODELS_DIR/$(basename "$MODEL_NAME" .gguf).gguf"
             ;;
         *)
             MODEL_FILE="$MODELS_DIR/$MODEL_NAME.gguf"
@@ -225,12 +230,10 @@ download_model() {
             --progress-bar
     else
         error "Neither wget nor curl is available for downloading models"
-        exit 1
     fi
 
     if [ ! -f "$MODEL_FILE" ]; then
         error "Failed to download model"
-        exit 1
     fi
 
     log "Model downloaded successfully to $MODEL_FILE"
@@ -263,7 +266,6 @@ check_dependencies() {
 
     if [ ${#missing_deps[@]} -gt 0 ]; then
         error "Missing dependencies: ${missing_deps[*]}"
-        exit 1
     fi
 
     log "Dependencies are satisfied"
@@ -278,7 +280,6 @@ check_port() {
             log "Existing process killed"
         else
             error "Port $PORT is in use. Please choose a different port or kill the existing process"
-            exit 1
         fi
     fi
 }
@@ -340,7 +341,10 @@ build_command() {
         cmd="$cmd --config $CONFIG_FILE"
     fi
 
-    if [ -n "$MODEL_PATH" ]; then
+    # Use -hf flag natively if MODEL_NAME is set (llama-server supports -hf directly)
+    if [ -n "$MODEL_NAME" ] && [ -z "$MODEL_PATH" ]; then
+        cmd="$cmd -hf $MODEL_NAME"
+    elif [ -n "$MODEL_PATH" ]; then
         cmd="$cmd --model $MODEL_PATH"
     fi
 
@@ -361,7 +365,7 @@ build_command() {
     fi
 
     if [ -n "$CONTEXT_SIZE" ]; then
-        cmd="$cmd --context-size $CONTEXT_SIZE"
+        cmd="$cmd --ctx-size $CONTEXT_SIZE"
     fi
 
     if [ -n "$BATCH_SIZE" ]; then
@@ -372,23 +376,19 @@ build_command() {
         cmd="$cmd --log-level $LOG_LEVEL"
     fi
 
+    # Unified Memory is controlled via environment variable (not a server flag)
     if [ -n "$UNIFIED_MEMORY" ]; then
-        cmd="$cmd --unified-memory"
+        export GGML_CUDA_ENABLE_UNIFIED_MEMORY=1
     fi
 
-    if [ -n "$NO_GPU" ]; then
-        cmd="$cmd --n-gpu-layers 0"
+    if [ "$NO_GPU" = "1" ]; then
+        cmd="$cmd --ngl 0"
     fi
 
     # Set environment variables
     export GGML_LOG_LEVEL="${LOG_LEVEL:-info}"
 
-    if [ -n "$UNIFIED_MEMORY" ]; then
-        export GGML_CUDA_ENABLE_UNIFIED_MEMORY=1
-    fi
-
-    log "Command to execute:"
-    echo "$cmd"
+    log "Command to execute: $cmd"
     echo ""
 
     echo "$cmd"
@@ -434,7 +434,7 @@ verify_server() {
                 log "Server is running with PID: $pid"
                 log "Access the server at: http://$HOST:$PORT"
             else
-                warning "Server process died. Check logs at $log_file"
+                warning "Server process died. Check logs in $LOG_DIR"
             fi
         else
             warning "No PID file found. Check if server is running"
@@ -450,6 +450,9 @@ cleanup() {
 
 # Main execution
 main() {
+    # Save argument count before parse_arguments consumes $@
+    local arg_count=$#
+
     # Initialize variables
     MODEL_PATH=""
     CONFIG_FILE=""
@@ -468,18 +471,18 @@ main() {
     VERSION=0
     LOG_FILE="$LOG_DIR/llama-server-launch.log"
 
+    # Show help if no arguments (check before parsing)
+    if [ "$arg_count" -eq 0 ]; then
+        show_help
+        exit 0
+    fi
+
     # Parse arguments
     parse_arguments "$@"
 
-    # Show help if requested
+    # Show version if requested
     if [ "$VERSION" = "1" ]; then
         check_version
-    fi
-
-    # Show help if no arguments
-    if [ $# -eq 0 ]; then
-        show_help
-        exit 0
     fi
 
     # List devices if requested
@@ -490,11 +493,17 @@ main() {
     # Check dependencies
     check_dependencies
 
-    # Check model
-    check_model
-
-    # Download model if specified
+    # Download model from HuggingFace if specified (before check_model)
     download_model
+
+    # Exit early in download-only mode (before starting server)
+    if [ "$DOWNLOAD_ONLY" = "1" ]; then
+        log "Download-only mode: exiting"
+        exit 0
+    fi
+
+    # Check model (skip if --hf was used and handled by download_model)
+    check_model
 
     # Check port
     check_port
@@ -508,13 +517,9 @@ main() {
     # Verify server
     verify_server
 
-    # Cleanup
-    cleanup
-
-    # Exit
-    if [ "$DOWNLOAD_ONLY" = "1" ]; then
-        log "Download-only mode: exiting"
-        exit 0
+    # Cleanup on exit (only if not running in background/daemon)
+    if [ "$DAEMON" != "1" ] && [ "$BACKGROUND" != "1" ]; then
+        cleanup
     fi
 }
 

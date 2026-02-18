@@ -38,7 +38,6 @@ info() {
 check_root() {
     if [ "$EUID" -ne 0 ]; then
         error "Please run as root or use sudo for full cleanup"
-        exit 1
     fi
 }
 
@@ -57,7 +56,7 @@ find_all_instances() {
     fi
 
     # Find all llama-server processes
-    local processes=$(pgrep -f llama-server)
+    local processes=$(pgrep -f llama-server | grep -v "^$$\$" || true)
 
     if [ -n "$processes" ]; then
         for pid in $processes; do
@@ -97,7 +96,7 @@ terminate_all_instances() {
     fi
 
     # Find all llama-server processes
-    local processes=$(pgrep -f llama-server)
+    local processes=$(pgrep -f llama-server | grep -v "^$$\$" || true)
 
     if [ -n "$processes" ]; then
         for pid in $processes; do

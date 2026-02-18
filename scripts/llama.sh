@@ -186,7 +186,7 @@ show_system_info() {
 execute_install() {
     log "Starting installation..."
     if [ -f "$SCRIPTS_DIR/install/install-lamacpp.sh" ]; then
-        bash "$SCRIPTS_DIR/install/install-lamacpp.sh"
+        bash "$SCRIPTS_DIR/install/install-lamacpp.sh" "$@"
     else
         error "Installation script not found: $SCRIPTS_DIR/install/install-lamacpp.sh"
     fi
@@ -195,7 +195,7 @@ execute_install() {
 execute_compile() {
     log "Starting compilation..."
     if [ -f "$SCRIPTS_DIR/compile/compile-lamacpp.sh" ]; then
-        bash "$SCRIPTS_DIR/compile/compile-lamacpp.sh"
+        bash "$SCRIPTS_DIR/compile/compile-lamacpp.sh" "$@"
     else
         error "Compilation script not found: $SCRIPTS_DIR/compile/compile-lamacpp.sh"
     fi
@@ -204,7 +204,7 @@ execute_compile() {
 execute_upgrade() {
     log "Starting upgrade..."
     if [ -f "$SCRIPTS_DIR/upgrade/upgrade-lamacpp.sh" ]; then
-        bash "$SCRIPTS_DIR/upgrade/upgrade-lamacpp.sh"
+        bash "$SCRIPTS_DIR/upgrade/upgrade-lamacpp.sh" "$@"
     else
         error "Upgrade script not found: $SCRIPTS_DIR/upgrade/upgrade-lamacpp.sh"
     fi
@@ -213,7 +213,7 @@ execute_upgrade() {
 execute_launch() {
     log "Starting launch..."
     if [ -f "$SCRIPTS_DIR/launch/launch-lamacpp.sh" ]; then
-        bash "$SCRIPTS_DIR/launch/launch-lamacpp.sh"
+        bash "$SCRIPTS_DIR/launch/launch-lamacpp.sh" "$@"
     else
         error "Launch script not found: $SCRIPTS_DIR/launch/launch-lamacpp.sh"
     fi
@@ -222,7 +222,7 @@ execute_launch() {
 execute_manage() {
     log "Starting management..."
     if [ -f "$SCRIPTS_DIR/manage/manage-lamacpp.sh" ]; then
-        bash "$SCRIPTS_DIR/manage/manage-lamacpp.sh"
+        bash "$SCRIPTS_DIR/manage/manage-lamacpp.sh" "$@"
     else
         error "Management script not found: $SCRIPTS_DIR/manage/manage-lamacpp.sh"
     fi
@@ -231,7 +231,7 @@ execute_manage() {
 execute_terminate() {
     log "Starting termination..."
     if [ -f "$SCRIPTS_DIR/terminate/terminate-lamacpp.sh" ]; then
-        bash "$SCRIPTS_DIR/terminate/terminate-lamacpp.sh"
+        bash "$SCRIPTS_DIR/terminate/terminate-lamacpp.sh" "$@"
     else
         error "Termination script not found: $SCRIPTS_DIR/terminate/terminate-lamacpp.sh"
     fi
@@ -240,7 +240,7 @@ execute_terminate() {
 execute_detect() {
     log "Detecting hardware..."
     if [ -f "$SCRIPTS_DIR/detect-hardware.sh" ]; then
-        bash "$SCRIPTS_DIR/detect-hardware.sh"
+        bash "$SCRIPTS_DIR/detect-hardware.sh" "$@"
     else
         error "Detection script not found: $SCRIPTS_DIR/detect-hardware.sh"
     fi
@@ -254,25 +254,25 @@ main() {
 
         case $command in
             install)
-                execute_install
+                execute_install "$@"
                 ;;
             compile)
-                execute_compile
+                execute_compile "$@"
                 ;;
             upgrade)
-                execute_upgrade
+                execute_upgrade "$@"
                 ;;
             launch)
-                execute_launch
+                execute_launch "$@"
                 ;;
             manage)
-                execute_manage
+                execute_manage "$@"
                 ;;
             terminate)
-                execute_terminate
+                execute_terminate "$@"
                 ;;
             detect)
-                execute_detect
+                execute_detect "$@"
                 ;;
             info)
                 show_system_info
@@ -284,7 +284,7 @@ main() {
                 show_help
                 ;;
             *)
-                error "Unknown command: $command"
+                echo -e "${RED}[ERROR]${NC} Unknown command: $command" >&2
                 show_help
                 exit 1
                 ;;
@@ -330,7 +330,7 @@ main() {
                 exit 0
                 ;;
             *)
-                error "Invalid choice"
+                warning "Invalid choice. Please enter 0-9."
                 ;;
         esac
 

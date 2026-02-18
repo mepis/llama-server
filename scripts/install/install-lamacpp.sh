@@ -68,7 +68,7 @@ detect_platform() {
 install_dependencies() {
     local platform=$1
 
-    log "Installing dependencies for $platform..."
+    log "Installing core build dependencies for $platform..."
 
     case "$platform" in
         ubuntu|debian)
@@ -79,12 +79,7 @@ install_dependencies() {
                 build-essential \
                 wget \
                 curl \
-                libssl-dev \
-                nvidia-cuda-toolkit \
-                rocm-dev \
-                vulkan-loader-dev \
-                libvulkan-dev \
-                glslc
+                libssl-dev
             ;;
         fedora|rhel|rocky|almalinux)
             dnf install -y \
@@ -95,11 +90,7 @@ install_dependencies() {
                 make \
                 wget \
                 curl \
-                openssl-devel \
-                cuda \
-                mesa-libGL-devel \
-                vulkan-loader-devel \
-                shaderc
+                openssl-devel
             ;;
         arch|manjaro)
             pacman -Sy --noconfirm \
@@ -108,9 +99,7 @@ install_dependencies() {
                 base-devel \
                 wget \
                 curl \
-                openssl \
-                vulkan-tools \
-                mesa
+                openssl
             ;;
         alpine)
             apk add --no-cache \
@@ -119,9 +108,7 @@ install_dependencies() {
                 build-base \
                 wget \
                 curl \
-                openssl-dev \
-                mesa-gl \
-                vulkan-loader-dev
+                openssl-dev
             ;;
         macos)
             if command -v brew &> /dev/null; then
@@ -137,57 +124,67 @@ install_dependencies() {
             ;;
     esac
 
-    log "Dependencies installed successfully"
+    log "Core dependencies installed successfully"
 }
 
 setup_cuda() {
+    local platform=$1
     if command -v nvidia-smi &> /dev/null; then
-        log "CUDA detected. Setting up CUDA support..."
+        log "Nvidia GPU detected. Setting up CUDA support..."
         if [[ "$platform" == "ubuntu" ]] || [[ "$platform" == "debian" ]]; then
-            apt-get install -y nvidia-cuda-toolkit
+            apt-get install -y nvidia-cuda-toolkit 2>/dev/null || \
+                warning "nvidia-cuda-toolkit install failed; CUDA may already be installed via driver packages"
         elif [[ "$platform" == "fedora" ]]; then
-            dnf install -y cuda
+            dnf install -y cuda 2>/dev/null || \
+                warning "cuda install failed; CUDA may already be installed"
         fi
         log "CUDA support configured"
     else
-        warning "No CUDA detected. CUDA support will not be available."
+        log "No Nvidia GPU detected. Skipping CUDA setup."
     fi
 }
 
 setup_rocm() {
+    local platform=$1
     if command -v rocm-smi &> /dev/null; then
-        log "ROCm detected. Setting up ROCm support..."
+        log "AMD GPU with ROCm detected. Setting up ROCm development packages..."
         if [[ "$platform" == "ubuntu" ]] || [[ "$platform" == "debian" ]]; then
-            apt-get install -y rocm-dev
+            apt-get install -y rocm-dev 2>/dev/null || \
+                warning "rocm-dev install failed; ROCm may already be installed"
         fi
         log "ROCm support configured"
     else
-        warning "No ROCm detected. ROCm support will not be available."
+        log "No AMD GPU with ROCm detected. Skipping ROCm setup."
     fi
 }
 
 setup_vulkan() {
-    if command -v vulkaninfo &> /dev/null; then
-        log "Vulkan detected. Setting up Vulkan support..."
+    local platform=$1
+    # Install Vulkan dev packages if a Vulkan-capable GPU appears to be present
+    if command -v vulkaninfo &> /dev/null || lspci 2>/dev/null | grep -qiE "VGA|3D|Display"; then
+        log "Setting up Vulkan support..."
         if [[ "$platform" == "ubuntu" ]] || [[ "$platform" == "debian" ]]; then
-            apt-get install -y libvulkan-dev glslc
+            apt-get install -y libvulkan-dev glslang-tools 2>/dev/null || \
+                warning "Vulkan dev package install failed; Vulkan may already be installed"
         elif [[ "$platform" == "fedora" ]]; then
-            dnf install -y vulkan-loader-devel shaderc
+            dnf install -y vulkan-loader-devel glslang 2>/dev/null || \
+                warning "Vulkan dev package install failed; Vulkan may already be installed"
+        elif [[ "$platform" == "arch" ]] || [[ "$platform" == "manjaro" ]]; then
+            pacman -S --noconfirm --needed vulkan-icd-loader vulkan-headers shaderc 2>/dev/null || \
+                warning "Vulkan dev package install failed"
         fi
         log "Vulkan support configured"
     else
-        warning "No Vulkan detected. Vulkan support will not be available."
+        log "No Vulkan-capable GPU detected. Skipping Vulkan setup."
     fi
 }
 
 clone_repository() {
     log "Cloning Llama.cpp repository..."
 
-    cd /tmp
     if [ -d "$CLONE_DIR" ]; then
         log "Repository already exists. Updating..."
-        cd "$CLONE_DIR"
-        git pull
+        git -C "$CLONE_DIR" pull
     else
         log "Cloning from GitHub..."
         git clone https://github.com/ggml-org/llama.cpp "$CLONE_DIR"
@@ -201,16 +198,14 @@ build_lamacpp() {
 
     log "Building Llama.cpp..."
 
-    cd "$CLONE_DIR"
-
     # Create build directory
     mkdir -p "$BUILD_DIR"
-    cd "$BUILD_DIR"
 
     # Configure build based on platform and hardware
     log "Configuring build with hardware detection..."
 
-    local cmake_args="-B . -DCMAKE_BUILD_TYPE=Release -DGGML_LOG_LEVEL=info"
+    # Use -S (source) and -B (build) to avoid cd
+    local cmake_args="-S $CLONE_DIR -B $BUILD_DIR -DCMAKE_BUILD_TYPE=Release"
 
     # Add GPU support based on detection
     if command -v nvidia-smi &> /dev/null; then
@@ -218,8 +213,8 @@ build_lamacpp() {
         cmake_args="$cmake_args -DGGML_CUDA=ON"
     fi
 
-    if command -v rocm-smi &> /dev/null; then
-        log "Adding ROCm support..."
+    if command -v rocm-smi &> /dev/null && command -v hipconfig &> /dev/null; then
+        log "Adding ROCm/HIP support..."
         cmake_args="$cmake_args -DGGML_HIP=ON"
     fi
 
@@ -228,15 +223,20 @@ build_lamacpp() {
         cmake_args="$cmake_args -DGGML_VULKAN=ON"
     fi
 
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        log "Adding Metal support..."
+        cmake_args="$cmake_args -DGGML_METAL=ON"
+    fi
+
     # Add BLAS support for CPU
-    cmake_args="$cmake_args -DGGML_BLAS=ON"
+    cmake_args="$cmake_args -DGGML_BLAS=ON -DGGML_NATIVE=ON"
 
     # Build
-    log "Running cmake..."
-    eval cmake $cmake_args
+    log "Running cmake configuration..."
+    eval cmake "$cmake_args"
 
     log "Building with parallel jobs (using $(nproc) cores)..."
-    cmake --build . --config Release -j $(nproc)
+    cmake --build "$BUILD_DIR" --config Release -j "$(nproc)"
 
     log "Build completed successfully"
 }
@@ -357,10 +357,10 @@ main() {
     # Install dependencies
     install_dependencies "$platform"
 
-    # Setup GPU support
-    setup_cuda
-    setup_rocm
-    setup_vulkan
+    # Setup GPU support (conditionally, based on detected hardware)
+    setup_cuda "$platform"
+    setup_rocm "$platform"
+    setup_vulkan "$platform"
 
     # Clone repository
     clone_repository

@@ -1,21 +1,40 @@
 {
   "name": "llama-server",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "A comprehensive set of bash scripts for installing, compiling, upgrading, launching, and managing Llama.cpp on various hardware configurations.",
+  "main": "server/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server/index.js",
+    "dev:server": "node server/index.js",
+    "dev:web": "cd web && npm run dev",
+    "dev": "npm run dev:server & npm run dev:web",
+    "build": "cd web && npm run build",
+    "postinstall": "cd web && npm install"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/mepis/llama-server.git"
   },
-  "keywords": [],
+  "keywords": [
+    "llama",
+    "llama.cpp",
+    "ai",
+    "llm",
+    "cuda",
+    "rocm",
+    "vulkan"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {
     "url": "https://github.com/mepis/llama-server/issues"
   },
-  "homepage": "https://github.com/mepis/llama-server#readme"
+  "homepage": "https://github.com/mepis/llama-server#readme",
+  "directories": {
+    "doc": "docs"
+  },
+  "dependencies": {
+    "express": "^5.2.1"
+  }
 }

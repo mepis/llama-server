@@ -120,12 +120,9 @@ backup_old_binaries() {
 clone_repository() {
     log "Cloning updated Llama.cpp repository..."
 
-    cd /tmp
-
     if [ -d "$SOURCE_DIR" ]; then
         log "Repository already exists. Updating..."
-        cd "$SOURCE_DIR"
-        git pull
+        git -C "$SOURCE_DIR" pull
     else
         log "Cloning from GitHub..."
         git clone https://github.com/ggml-org/llama.cpp "$SOURCE_DIR"
@@ -174,6 +171,7 @@ detect_hardware() {
     fi
 
     # Save hardware configuration
+    mkdir -p "$BUILD_DIR"
     cat > "$BUILD_DIR/hardware_config.txt" <<EOF
 Hardware Configuration
 ====================
@@ -198,10 +196,11 @@ EOF
 configure_build() {
     log "Configuring build..."
 
-    cd "$BUILD_DIR"
+    mkdir -p "$BUILD_DIR"
 
     # Start with basic configuration
-    local cmake_args="-B . -DCMAKE_BUILD_TYPE=Release -DGGML_LOG_LEVEL=info -DGGML_NATIVE=OFF"
+    local cmake_args="-S $SOURCE_DIR -B $BUILD_DIR -DCMAKE_BUILD_TYPE=Release -DGGML_LOG_LEVEL=info -DGGML_NATIVE=OFF"
+    local rocm_env=""
 
     # Add backend support based on detected hardware
     if command -v nvidia-smi &> /dev/null; then
@@ -209,10 +208,12 @@ configure_build() {
         cmake_args="$cmake_args -DGGML_CUDA=ON"
     fi
 
-    if command -v rocm-smi &> /dev/null; then
+    if command -v rocm-smi &> /dev/null && command -v hipconfig &> /dev/null; then
         log "Enabling ROCm support..."
-        HIPCXX="$(hipconfig -l)/clang" HIP_PATH="$(hipconfig -p)" \
-            cmake_args="$cmake_args -DGGML_HIP=ON -DGPU_TARGETS=$(rocm-smi --showabi | head -1)"
+        local gpu_targets
+        gpu_targets="$(rocm-smi --showabi 2>/dev/null | grep -oE 'gfx[0-9]+' | head -1 || echo 'gfx900')"
+        rocm_env="HIPCXX=$(hipconfig -p)/bin/clang HIP_PATH=$(hipconfig -p)"
+        cmake_args="$cmake_args -DGGML_HIP=ON -DGPU_TARGETS=$gpu_targets"
     fi
 
     if command -v vulkaninfo &> /dev/null; then
@@ -268,12 +269,12 @@ configure_build() {
     fi
 
     # Execute cmake
-    info "Running: cmake $cmake_args"
-    eval cmake $cmake_args
-
-    if [ $? -ne 0 ]; then
-        error "CMake configuration failed"
-        exit 1
+    if [ -n "$rocm_env" ]; then
+        info "Running: $rocm_env cmake $cmake_args"
+        eval "$rocm_env cmake $cmake_args" || { error "CMake configuration failed"; }
+    else
+        info "Running: cmake $cmake_args"
+        eval cmake "$cmake_args" || { error "CMake configuration failed"; }
     fi
 
     log "Build configuration completed"
@@ -282,19 +283,12 @@ configure_build() {
 compile_project() {
     log "Starting compilation..."
 
-    cd "$BUILD_DIR"
-
     # Determine number of parallel jobs
     local parallel_jobs=$(nproc)
     info "Using $parallel_jobs parallel jobs"
 
     # Build
-    cmake --build . --config Release -j $parallel_jobs
-
-    if [ $? -ne 0 ]; then
-        error "Compilation failed"
-        exit 1
-    fi
+    cmake --build "$BUILD_DIR" --config Release -j "$parallel_jobs" || { error "Compilation failed"; }
 
     log "Compilation completed successfully"
 }
@@ -495,7 +489,7 @@ main() {
     # Ask for confirmation
     read -p "This will upgrade your Llama.cpp installation. Continue? [y/N]: " confirm
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-        error "Upgrade cancelled"
+        log "Upgrade cancelled"
         exit 0
     fi
 
@@ -523,11 +517,10 @@ main() {
     # Install new binaries
     install_new_binaries
 
-    # Restore configuration
-    restore_configuration
-
-    # Create config
-    create_config
+    # Restore configuration (if backup exists); otherwise create fresh config
+    if ! restore_configuration; then
+        create_config
+    fi
 
     # Create service
     create_service

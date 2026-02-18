@@ -61,7 +61,7 @@ list_processes() {
     fi
 
     # Find all llama-server processes
-    local processes=$(pgrep -f llama-server)
+    local processes=$(pgrep -f llama-server | grep -v "^$$\$" || true)
 
     if [ -z "$processes" ]; then
         echo "No Llama.cpp processes found"
@@ -88,7 +88,6 @@ start() {
         local pid=$(cat "$PID_FILE")
         if ps -p $pid > /dev/null 2>&1; then
             error "Server is already running (PID: $pid)"
-            exit 1
         else
             warning "Stale PID file found, removing..."
             rm -f "$PID_FILE"
@@ -384,7 +383,7 @@ main() {
             show_help
             ;;
         *)
-            error "Unknown command: $command"
+            echo -e "${RED}[ERROR]${NC} Unknown command: $command" >&2
             show_help
             exit 1
             ;;

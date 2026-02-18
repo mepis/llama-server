@@ -98,7 +98,8 @@ detect_hardware() {
         fi
     fi
 
-    # Save hardware configuration
+    # Save hardware configuration (ensure build dir exists first)
+    mkdir -p "$BUILD_DIR"
     cat > "$BUILD_DIR/hardware_config.txt" <<EOF
 Hardware Configuration
 ====================
@@ -176,10 +177,14 @@ show_compilation_options() {
 configure_build() {
     log "Configuring build..."
 
-    cd "$BUILD_DIR"
+    # Ensure build directory exists before using it
+    mkdir -p "$BUILD_DIR"
 
-    # Start with basic configuration
-    local cmake_args="-B . -DCMAKE_BUILD_TYPE=Release -DGGML_LOG_LEVEL=info -DGGML_NATIVE=OFF"
+    # Start with basic configuration: source dir is SOURCE_DIR, build dir is BUILD_DIR
+    local cmake_args="-S $SOURCE_DIR -B $BUILD_DIR -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF"
+
+    # Track ROCm environment variables separately
+    local rocm_env=""
 
     # Add backend support
     for backend in $BACKENDS; do
@@ -193,10 +198,13 @@ configure_build() {
                 fi
                 ;;
             ROCm)
-                if command -v rocm-smi &> /dev/null; then
+                if command -v rocm-smi &> /dev/null && command -v hipconfig &> /dev/null; then
                     log "Enabling ROCm support..."
-                    HIPCXX="$(hipconfig -l)/clang" HIP_PATH="$(hipconfig -p)" \
-                        cmake_args="$cmake_args -DGGML_HIP=ON -DGPU_TARGETS=$(rocm-smi --showabi | head -1)"
+                    local hipcxx="$(hipconfig -l)/clang"
+                    local hip_path="$(hipconfig -p)"
+                    local gpu_targets="$(rocm-smi --showabi 2>/dev/null | grep -oE 'gfx[0-9]+' | head -1 || echo 'gfx900')"
+                    rocm_env="HIPCXX=$hipcxx HIP_PATH=$hip_path"
+                    cmake_args="$cmake_args -DGGML_HIP=ON -DGPU_TARGETS=$gpu_targets"
                 else
                     warning "ROCm not detected, skipping ROCm support"
                 fi
@@ -223,8 +231,8 @@ configure_build() {
     # Add BLAS support for CPU
     cmake_args="$cmake_args -DGGML_BLAS=ON"
 
-    # Ask about Unified Memory for CUDA
-    if echo "$BACKENDS" | grep -q "CUDA" && [ -n "$UNIFIED_MEMORY" ] || [ -n "$UNIFIED_MEMORY" ]; then
+    # Ask about Unified Memory for CUDA (only when CUDA is in BACKENDS)
+    if echo "$BACKENDS" | grep -q "CUDA"; then
         read -p "Enable CUDA Unified Memory support? (recommended for systems with limited GPU memory) [y/N]: " enable_unified_memory
         if [[ "$enable_unified_memory" =~ ^[Yy]$ ]]; then
             cmake_args="$cmake_args -DGGML_CUDA_ENABLE_UNIFIED_MEMORY=ON"
@@ -233,8 +241,8 @@ configure_build() {
     fi
 
     # Ask about additional optimizations
-    read -p "Enable AVX2 optimization? [Y/n]: " enable_avx2
-    if [[ "$enable_avx2" =~ ^[Nn]$ ]]; then
+    read -p "Enable native CPU optimizations (AVX2/AVX-512/NEON)? [Y/n]: " enable_native
+    if [[ "$enable_native" =~ ^[Nn]$ ]]; then
         cmake_args="$cmake_args -DGGML_NATIVE=OFF"
     else
         cmake_args="$cmake_args -DGGML_NATIVE=ON"
@@ -262,9 +270,13 @@ configure_build() {
         log "Static build enabled"
     fi
 
-    # Execute cmake
-    info "Running: cmake $cmake_args"
-    eval cmake $cmake_args
+    # Execute cmake (with optional ROCm environment variables)
+    info "Running: ${rocm_env:+$rocm_env }cmake $cmake_args"
+    if [ -n "$rocm_env" ]; then
+        eval "$rocm_env cmake $cmake_args"
+    else
+        eval cmake "$cmake_args"
+    fi
 
     if [ $? -ne 0 ]; then
         error "CMake configuration failed"
@@ -277,14 +289,12 @@ configure_build() {
 compile_project() {
     log "Starting compilation..."
 
-    cd "$BUILD_DIR"
-
     # Determine number of parallel jobs
     local parallel_jobs=$(nproc)
     info "Using $parallel_jobs parallel jobs"
 
-    # Build
-    cmake --build . --config Release -j $parallel_jobs
+    # Build using the build directory directly (no cd needed)
+    cmake --build "$BUILD_DIR" --config Release -j "$parallel_jobs"
 
     if [ $? -ne 0 ]; then
         error "Compilation failed"
@@ -396,12 +406,8 @@ main() {
         git clone https://github.com/ggml-org/llama.cpp "$SOURCE_DIR"
     else
         log "Repository already exists. Updating..."
-        cd "$SOURCE_DIR"
-        git pull
+        git -C "$SOURCE_DIR" pull
     fi
-
-    # Create build directory
-    mkdir -p "$BUILD_DIR"
 
     # Detect hardware
     detect_hardware
