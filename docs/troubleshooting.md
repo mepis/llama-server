@@ -46,7 +46,7 @@ curl -I https://github.com
 
 # Try with proxy if behind firewall
 export https_proxy=http://your-proxy:port
-git clone https://github.com/ggml-org/llama.cpp /tmp/llama-cpp
+git clone https://github.com/ggml-org/llama.cpp ~/.local/llama-cpp/src
 
 # Set git proxy
 git config --global http.proxy http://your-proxy:port

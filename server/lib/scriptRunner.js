@@ -17,7 +17,7 @@ const SCRIPT_MAP = {
   'manage': path.join(ROOT, 'scripts', 'manage', 'manage-lamacpp.sh'),
   'terminate': path.join(ROOT, 'scripts', 'terminate', 'terminate-lamacpp.sh'),
   'upgrade': path.join(ROOT, 'scripts', 'upgrade', 'upgrade-lamacpp.sh'),
-  'detect-hardware': path.join(ROOT, 'scripts', 'detect-hardware.sh'),
+  'detect': path.join(ROOT, 'scripts', 'detect-hardware.sh'),
   'llama': path.join(ROOT, 'scripts', 'llama.sh'),
 }
 

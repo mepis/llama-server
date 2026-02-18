@@ -13,26 +13,28 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-SOURCE_DIR="${SOURCE_DIR:-/tmp/llama-cpp}"
-BUILD_DIR="${BUILD_DIR:-/tmp/llama-cpp-build}"
-INSTALL_DIR="${INSTALL_DIR:-/opt/llama-cpp}"
-LOG_FILE="${LOG_FILE:-/var/log/llama-cpp-compile.log}"
+SOURCE_DIR="${SOURCE_DIR:-$HOME/.local/llama-cpp/src}"
+BUILD_DIR="${BUILD_DIR:-$HOME/.local/llama-cpp/build}"
+INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/llama-cpp}"
+LOG_DIR="${INSTALL_DIR}/logs"
+LOG_FILE="${LOG_FILE:-${LOG_DIR}/compile.log}"
 
 # Functions
 log() {
+    mkdir -p "$(dirname "$LOG_FILE")"
     echo -e "${GREEN}[INFO]${NC} $1" | tee -a "$LOG_FILE"
 }
 
 error() {
-    echo -e "${RED}[ERROR]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${RED}[ERROR]${NC} $1" | tee -a "$LOG_FILE" 2>/dev/null
 }
 
 warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${YELLOW}[WARNING]${NC} $1" | tee -a "$LOG_FILE" 2>/dev/null
 }
 
 info() {
-    echo -e "${BLUE}[INFO]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${BLUE}[INFO]${NC} $1" | tee -a "$LOG_FILE" 2>/dev/null
 }
 
 check_dependencies() {
@@ -337,9 +339,18 @@ install_binaries() {
         log "Static libraries installed"
     fi
 
-    # Create symlinks
-    ln -sf "$INSTALL_DIR/bin/llama-server" /usr/local/bin/llama-server
-    ln -sf "$INSTALL_DIR/bin/llama-cli" /usr/local/bin/llama-cli
+    # Create symlinks in ~/.local/bin
+    local bin_dir="$HOME/.local/bin"
+    mkdir -p "$bin_dir"
+    ln -sf "$INSTALL_DIR/bin/llama-server" "$bin_dir/llama-server"
+    ln -sf "$INSTALL_DIR/bin/llama-cli" "$bin_dir/llama-cli"
+
+    # Check if ~/.local/bin is in PATH
+    if [[ ":$PATH:" != *":$bin_dir:"* ]]; then
+        warning "$bin_dir is not in your PATH"
+        echo "  Add it by running: export PATH=\"\$HOME/.local/bin:\$PATH\""
+        echo "  Or add that line to your ~/.bashrc or ~/.zshrc"
+    fi
 
     log "Installation completed"
 }
@@ -394,7 +405,8 @@ main() {
     echo "=========================================="
     echo ""
 
-    # Create log file
+    # Create log directory and file
+    mkdir -p "$LOG_DIR"
     touch "$LOG_FILE"
 
     # Check dependencies

@@ -14,8 +14,8 @@ NC='\033[0m' # No Color
 
 # Configuration
 PID_FILE="${PID_FILE:-/tmp/llama-server.pid}"
-LOG_DIR="${LOG_DIR:-/opt/llama-cpp/logs}"
-CONFIG_DIR="${CONFIG_DIR:-/opt/llama-cpp/config}"
+LOG_DIR="${LOG_DIR:-$HOME/.local/llama-cpp/logs}"
+CONFIG_DIR="${CONFIG_DIR:-$HOME/.local/llama-cpp/config}"
 
 # Functions
 log() {
@@ -95,10 +95,10 @@ start() {
     fi
 
     # Start the server
-    if [ -f "/usr/local/bin/llama-server" ]; then
+    if [ -f "$HOME/.local/llama-cpp/bin/llama-server" ]; then
+        "$HOME/.local/llama-cpp/bin/llama-server" &
+    elif [ -f "/usr/local/bin/llama-server" ]; then
         /usr/local/bin/llama-server &
-    elif [ -f "/opt/llama-cpp/bin/llama-server" ]; then
-        /opt/llama-cpp/bin/llama-server &
     else
         error "llama-server binary not found"
         exit 1
@@ -215,10 +215,10 @@ status() {
             echo ""
 
             # Try to get more details if possible
-            if [ -f "/usr/local/bin/llama-server" ] || [ -f "/opt/llama-cpp/bin/llama-server" ]; then
-                local server_binary="/usr/local/bin/llama-server"
+            if [ -f "$HOME/.local/llama-cpp/bin/llama-server" ] || [ -f "/usr/local/bin/llama-server" ]; then
+                local server_binary="$HOME/.local/llama-cpp/bin/llama-server"
                 if [ ! -f "$server_binary" ]; then
-                    server_binary="/opt/llama-cpp/bin/llama-server"
+                    server_binary="/usr/local/bin/llama-server"
                 fi
 
                 # Try to get model info

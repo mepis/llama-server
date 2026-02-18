@@ -78,10 +78,10 @@ sudo ./scripts/install/install-lamacpp.sh
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `INSTALL_DIR` | `/opt/llama-cpp` | Installation directory |
-| `CLONE_DIR` | `/tmp/llama-cpp` | Source code directory |
-| `BUILD_DIR` | `/tmp/llama-cpp-build` | Build directory |
-| `LOG_FILE` | `/var/log/llama-cpp-install.log` | Log file path |
+| `INSTALL_DIR` | `~/.local/llama-cpp` | Installation directory |
+| `CLONE_DIR` | `~/.local/llama-cpp/src` | Source code directory |
+| `BUILD_DIR` | `~/.local/llama-cpp/build` | Build directory |
+| `LOG_FILE` | `~/.local/llama-cpp/logs/install.log` | Log file path |
 
 ### Installed Files
 
@@ -138,10 +138,10 @@ For ROCm builds, the following environment variables are set automatically:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SOURCE_DIR` | `/tmp/llama-cpp` | Source code directory |
-| `BUILD_DIR` | `/tmp/llama-cpp-build` | Build directory |
-| `INSTALL_DIR` | `/opt/llama-cpp` | Installation directory |
-| `LOG_FILE` | `/var/log/llama-cpp-compile.log` | Log file path |
+| `SOURCE_DIR` | `~/.local/llama-cpp/src` | Source code directory |
+| `BUILD_DIR` | `~/.local/llama-cpp/build` | Build directory |
+| `INSTALL_DIR` | `~/.local/llama-cpp` | Installation directory |
+| `LOG_FILE` | `~/.local/llama-cpp/logs/compile.log` | Log file path |
 
 ---
 
@@ -422,9 +422,9 @@ Unified management interface for all Llama.cpp operations.
 These variables can be set to customize script behavior across all scripts:
 
 ```bash
-export INSTALL_DIR=/opt/llama-cpp      # Installation directory
-export BUILD_DIR=/tmp/llama-cpp-build  # Build directory
-export LOG_DIR=/opt/llama-cpp/logs     # Log directory
+export INSTALL_DIR=~/.local/llama-cpp          # Installation directory
+export BUILD_DIR=~/.local/llama-cpp/build      # Build directory
+export LOG_DIR=~/.local/llama-cpp/logs         # Log directory
 export PID_FILE=/tmp/llama-server.pid  # PID file
 export PORT=8080                        # Default server port
 export HOST=0.0.0.0                    # Default bind address

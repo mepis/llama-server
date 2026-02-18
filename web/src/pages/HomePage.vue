@@ -15,7 +15,7 @@ cd llama-server
 ./scripts/detect-hardware.sh
 
 # 3. Install Llama.cpp
-sudo ./scripts/install/install-lamacpp.sh
+./scripts/install/install-lamacpp.sh
 
 # 4. Launch with a model
 ./scripts/launch/launch-lamacpp.sh --hf bartowski/Llama-3.2-3B-Instruct-GGUF`

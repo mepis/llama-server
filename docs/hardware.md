@@ -347,7 +347,7 @@ You can compile with multiple backends simultaneously. The runtime will automati
 ```bash
 # In compile-lamacpp.sh, select option 1 (All backends)
 # Or manually:
-cmake -S /tmp/llama-cpp -B /tmp/llama-cpp-build \
+cmake -S ~/.local/llama-cpp/src -B ~/.local/llama-cpp/build \
   -DGGML_CUDA=ON \
   -DGGML_VULKAN=ON \
   -DGGML_BLAS=ON \

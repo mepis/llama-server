@@ -12,29 +12,24 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Configuration
-INSTALL_DIR="${INSTALL_DIR:-/opt/llama-cpp}"
-CLONE_DIR="${CLONE_DIR:-/tmp/llama-cpp}"
-BUILD_DIR="${BUILD_DIR:-/tmp/llama-cpp-build}"
-LOG_FILE="${LOG_FILE:-/var/log/llama-cpp-install.log}"
+INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/llama-cpp}"
+CLONE_DIR="${CLONE_DIR:-$HOME/.local/llama-cpp/src}"
+BUILD_DIR="${BUILD_DIR:-$HOME/.local/llama-cpp/build}"
+LOG_DIR="${INSTALL_DIR}/logs"
+LOG_FILE="${LOG_FILE:-${LOG_DIR}/install.log}"
 
 # Functions
 log() {
+    mkdir -p "$(dirname "$LOG_FILE")"
     echo -e "${GREEN}[INFO]${NC} $1" | tee -a "$LOG_FILE"
 }
 
 error() {
-    echo -e "${RED}[ERROR]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${RED}[ERROR]${NC} $1" | tee -a "$LOG_FILE" 2>/dev/null
 }
 
 warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1" | tee -a "$LOG_FILE"
-}
-
-check_root() {
-    if [ "$EUID" -ne 0 ]; then
-        error "Please run as root or use sudo"
-        exit 1
-    fi
+    echo -e "${YELLOW}[WARNING]${NC} $1" | tee -a "$LOG_FILE" 2>/dev/null
 }
 
 detect_platform() {
@@ -65,117 +60,87 @@ detect_platform() {
     fi
 }
 
-install_dependencies() {
+check_dependencies() {
     local platform=$1
+    local missing_deps=()
 
-    log "Installing core build dependencies for $platform..."
+    log "Checking core build dependencies..."
 
-    case "$platform" in
-        ubuntu|debian)
-            apt-get update
-            apt-get install -y \
-                git \
-                cmake \
-                build-essential \
-                wget \
-                curl \
-                libssl-dev
-            ;;
-        fedora|rhel|rocky|almalinux)
-            dnf install -y \
-                git \
-                cmake \
-                gcc \
-                gcc-c++ \
-                make \
-                wget \
-                curl \
-                openssl-devel
-            ;;
-        arch|manjaro)
-            pacman -Sy --noconfirm \
-                git \
-                cmake \
-                base-devel \
-                wget \
-                curl \
-                openssl
-            ;;
-        alpine)
-            apk add --no-cache \
-                git \
-                cmake \
-                build-base \
-                wget \
-                curl \
-                openssl-dev
-            ;;
-        macos)
-            if command -v brew &> /dev/null; then
-                brew install cmake git wget curl
-            else
-                warning "Homebrew not found. Please install Homebrew first."
-                exit 1
-            fi
-            ;;
-        windows)
-            warning "Windows installation requires manual setup. Please refer to build documentation."
+    for cmd in git cmake gcc g++ make wget curl; do
+        if ! command -v "$cmd" &> /dev/null; then
+            missing_deps+=("$cmd")
+        fi
+    done
+
+    if [ ${#missing_deps[@]} -gt 0 ]; then
+        warning "Missing dependencies: ${missing_deps[*]}"
+        echo ""
+        echo "Please install them using your package manager:"
+        case "$platform" in
+            ubuntu|debian)
+                echo "  sudo apt-get update && sudo apt-get install -y git cmake build-essential wget curl libssl-dev"
+                ;;
+            fedora|rhel|rocky|almalinux)
+                echo "  sudo dnf install -y git cmake gcc gcc-c++ make wget curl openssl-devel"
+                ;;
+            arch|manjaro)
+                echo "  sudo pacman -Sy --noconfirm git cmake base-devel wget curl openssl"
+                ;;
+            alpine)
+                echo "  sudo apk add --no-cache git cmake build-base wget curl openssl-dev"
+                ;;
+            macos)
+                echo "  brew install cmake git wget curl"
+                ;;
+        esac
+        echo ""
+        read -p "Continue anyway? [y/N]: " cont
+        if [[ ! "$cont" =~ ^[Yy]$ ]]; then
             exit 1
-            ;;
-    esac
-
-    log "Core dependencies installed successfully"
+        fi
+    else
+        log "All core dependencies are installed"
+    fi
 }
 
-setup_cuda() {
+check_gpu_support() {
     local platform=$1
+
+    # CUDA
     if command -v nvidia-smi &> /dev/null; then
-        log "Nvidia GPU detected. Setting up CUDA support..."
-        if [[ "$platform" == "ubuntu" ]] || [[ "$platform" == "debian" ]]; then
-            apt-get install -y nvidia-cuda-toolkit 2>/dev/null || \
-                warning "nvidia-cuda-toolkit install failed; CUDA may already be installed via driver packages"
-        elif [[ "$platform" == "fedora" ]]; then
-            dnf install -y cuda 2>/dev/null || \
-                warning "cuda install failed; CUDA may already be installed"
+        log "Nvidia GPU detected. CUDA support will be enabled."
+        if ! command -v nvcc &> /dev/null; then
+            warning "nvcc not found. CUDA toolkit may not be installed."
+            echo "  Install with: sudo apt-get install nvidia-cuda-toolkit (Ubuntu/Debian)"
         fi
-        log "CUDA support configured"
     else
         log "No Nvidia GPU detected. Skipping CUDA setup."
     fi
-}
 
-setup_rocm() {
-    local platform=$1
+    # ROCm
     if command -v rocm-smi &> /dev/null; then
-        log "AMD GPU with ROCm detected. Setting up ROCm development packages..."
-        if [[ "$platform" == "ubuntu" ]] || [[ "$platform" == "debian" ]]; then
-            apt-get install -y rocm-dev 2>/dev/null || \
-                warning "rocm-dev install failed; ROCm may already be installed"
-        fi
-        log "ROCm support configured"
+        log "AMD GPU with ROCm detected. ROCm support will be enabled."
     else
         log "No AMD GPU with ROCm detected. Skipping ROCm setup."
     fi
-}
 
-setup_vulkan() {
-    local platform=$1
-    # Install Vulkan dev packages if a Vulkan-capable GPU appears to be present
+    # Vulkan
     if command -v vulkaninfo &> /dev/null || lspci 2>/dev/null | grep -qiE "VGA|3D|Display"; then
-        log "Setting up Vulkan support..."
-        if [[ "$platform" == "ubuntu" ]] || [[ "$platform" == "debian" ]]; then
-            apt-get install -y libvulkan-dev glslang-tools 2>/dev/null || \
-                warning "Vulkan dev package install failed; Vulkan may already be installed"
-        elif [[ "$platform" == "fedora" ]]; then
-            dnf install -y vulkan-loader-devel glslang 2>/dev/null || \
-                warning "Vulkan dev package install failed; Vulkan may already be installed"
-        elif [[ "$platform" == "arch" ]] || [[ "$platform" == "manjaro" ]]; then
-            pacman -S --noconfirm --needed vulkan-icd-loader vulkan-headers shaderc 2>/dev/null || \
-                warning "Vulkan dev package install failed"
+        log "Vulkan-capable GPU detected."
+        if ! command -v vulkaninfo &> /dev/null; then
+            warning "vulkaninfo not found. Vulkan dev packages may not be installed."
+            case "$platform" in
+                ubuntu|debian)
+                    echo "  Install with: sudo apt-get install libvulkan-dev glslang-tools"
+                    ;;
+                fedora)
+                    echo "  Install with: sudo dnf install vulkan-loader-devel glslang"
+                    ;;
+                arch|manjaro)
+                    echo "  Install with: sudo pacman -S vulkan-icd-loader vulkan-headers shaderc"
+                    ;;
+            esac
         fi
-        log "Vulkan support configured"
-    else
-        log "No Vulkan-capable GPU detected. Skipping Vulkan setup."
     fi
 }
 
@@ -241,27 +206,33 @@ build_lamacpp() {
     log "Build completed successfully"
 }
 
-install_to_system() {
-    log "Installing Llama.cpp to system..."
+install_binaries() {
+    log "Installing Llama.cpp..."
 
-    # Create installation directory
+    # Create installation directories
     mkdir -p "$INSTALL_DIR"
-
-    # Copy binaries
-    if [ -d "$BUILD_DIR" ]; then
-        cp -r "$BUILD_DIR/bin" "$INSTALL_DIR/"
-    fi
-
-    # Create configuration directory
+    mkdir -p "$INSTALL_DIR/bin"
     mkdir -p "$INSTALL_DIR/config"
     mkdir -p "$INSTALL_DIR/models"
     mkdir -p "$INSTALL_DIR/logs"
 
-    # Create symlink for main binary
-    ln -sf "$INSTALL_DIR/bin/llama-server" /usr/local/bin/llama-server
+    # Copy binaries
+    if [ -d "$BUILD_DIR/bin" ]; then
+        cp -r "$BUILD_DIR/bin/"* "$INSTALL_DIR/bin/"
+    fi
 
-    # Create symlink for CLI
-    ln -sf "$INSTALL_DIR/bin/llama-cli" /usr/local/bin/llama-cli
+    # Create symlinks in ~/.local/bin (create if needed)
+    local bin_dir="$HOME/.local/bin"
+    mkdir -p "$bin_dir"
+    ln -sf "$INSTALL_DIR/bin/llama-server" "$bin_dir/llama-server"
+    ln -sf "$INSTALL_DIR/bin/llama-cli" "$bin_dir/llama-cli"
+
+    # Check if ~/.local/bin is in PATH
+    if [[ ":$PATH:" != *":$bin_dir:"* ]]; then
+        warning "$bin_dir is not in your PATH"
+        echo "  Add it by running: export PATH=\"\$HOME/.local/bin:\$PATH\""
+        echo "  Or add that line to your ~/.bashrc or ~/.zshrc"
+    fi
 
     log "Installation completed successfully"
 }
@@ -274,7 +245,7 @@ create_config() {
 # This file contains default configuration settings
 
 # Model settings
-model_path: "/opt/llama-cpp/models"
+model_path: "$INSTALL_DIR/models"
 model_name: ""
 model_file: ""
 
@@ -293,39 +264,13 @@ batch_size: 512
 
 # Logging
 log_level: "info"
-log_file: "/opt/llama-cpp/logs/llama-server.log"
+log_file: "$INSTALL_DIR/logs/llama-server.log"
 
 # Unified Memory for CUDA
 unified_memory: true
 EOF
 
     log "Configuration file created"
-}
-
-create_service() {
-    log "Creating systemd service..."
-
-    cat > /etc/systemd/system/llama-server.service <<EOF
-[Unit]
-Description=Llama.cpp Server
-After=network.target
-
-[Service]
-Type=simple
-User=llama
-Group=llama
-WorkingDirectory=/opt/llama-cpp
-Environment="PATH=/usr/local/bin:\${PATH}"
-ExecStart=/usr/local/bin/llama-server --config /opt/llama-cpp/config/default.yaml
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    systemctl daemon-reload
-    log "Systemd service created"
 }
 
 cleanup() {
@@ -344,23 +289,19 @@ main() {
     echo "=========================================="
     echo ""
 
-    # Check root
-    check_root
-
     # Detect platform
     local platform=$(detect_platform)
     log "Platform detected: $platform"
 
-    # Create log file
+    # Create log directory and file
+    mkdir -p "$LOG_DIR"
     touch "$LOG_FILE"
 
-    # Install dependencies
-    install_dependencies "$platform"
+    # Check dependencies (advise on missing ones)
+    check_dependencies "$platform"
 
-    # Setup GPU support (conditionally, based on detected hardware)
-    setup_cuda "$platform"
-    setup_rocm "$platform"
-    setup_vulkan "$platform"
+    # Check GPU support (advise on missing packages)
+    check_gpu_support "$platform"
 
     # Clone repository
     clone_repository
@@ -368,16 +309,11 @@ main() {
     # Build Llama.cpp
     build_lamacpp "$platform"
 
-    # Install to system
-    install_to_system
+    # Install binaries
+    install_binaries
 
     # Create configuration
     create_config
-
-    # Create service (on Linux)
-    if [[ "$platform" == "ubuntu" ]] || [[ "$platform" == "debian" ]] || [[ "$platform" == "fedora" ]] || [[ "$platform" == "arch" ]]; then
-        create_service
-    fi
 
     # Cleanup
     cleanup
@@ -392,10 +328,6 @@ main() {
     echo "To use Llama.cpp:"
     echo "  llama-server --help"
     echo "  llama-cli --help"
-    echo ""
-    echo "To start the server as a service:"
-    echo "  sudo systemctl start llama-server"
-    echo "  sudo systemctl enable llama-server"
     echo ""
     echo "To download models from HuggingFace:"
     echo "  llama-server --model /path/to/model.gguf -hf <model-name>"

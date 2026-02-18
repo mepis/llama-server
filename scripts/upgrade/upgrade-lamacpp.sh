@@ -13,34 +13,29 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-CURRENT_INSTALL_DIR="${CURRENT_INSTALL_DIR:-/opt/llama-cpp}"
-BACKUP_DIR="${BACKUP_DIR:-/opt/llama-cpp-backup}"
-SOURCE_DIR="${SOURCE_DIR:-/tmp/llama-cpp}"
-BUILD_DIR="${BUILD_DIR:-/tmp/llama-cpp-upgrade-build}"
-LOG_FILE="${LOG_FILE:-/var/log/llama-cpp-upgrade.log}"
+CURRENT_INSTALL_DIR="${CURRENT_INSTALL_DIR:-$HOME/.local/llama-cpp}"
+BACKUP_DIR="${BACKUP_DIR:-$HOME/.local/llama-cpp-backup}"
+SOURCE_DIR="${SOURCE_DIR:-$HOME/.local/llama-cpp/src}"
+BUILD_DIR="${BUILD_DIR:-$HOME/.local/llama-cpp/upgrade-build}"
+LOG_DIR="${CURRENT_INSTALL_DIR}/logs"
+LOG_FILE="${LOG_FILE:-${LOG_DIR}/upgrade.log}"
 
 # Functions
 log() {
+    mkdir -p "$(dirname "$LOG_FILE")"
     echo -e "${GREEN}[INFO]${NC} $1" | tee -a "$LOG_FILE"
 }
 
 error() {
-    echo -e "${RED}[ERROR]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${RED}[ERROR]${NC} $1" | tee -a "$LOG_FILE" 2>/dev/null
 }
 
 warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${YELLOW}[WARNING]${NC} $1" | tee -a "$LOG_FILE" 2>/dev/null
 }
 
 info() {
-    echo -e "${BLUE}[INFO]${NC} $1" | tee -a "$LOG_FILE"
-}
-
-check_root() {
-    if [ "$EUID" -ne 0 ]; then
-        error "Please run as root or use sudo"
-        exit 1
-    fi
+    echo -e "${BLUE}[INFO]${NC} $1" | tee -a "$LOG_FILE" 2>/dev/null
 }
 
 check_installation() {
@@ -84,15 +79,20 @@ create_backup() {
 stop_services() {
     log "Stopping Llama.cpp services..."
 
-    # Stop systemd service if running
-    if systemctl is-active --quiet llama-server; then
-        systemctl stop llama-server
-        log "Systemd service stopped"
+    # Stop systemd service if running (only if we have permission)
+    if command -v systemctl &> /dev/null && systemctl is-active --quiet llama-server 2>/dev/null; then
+        if [ "$EUID" -eq 0 ]; then
+            systemctl stop llama-server
+            log "Systemd service stopped"
+        else
+            warning "Systemd llama-server service is running but requires sudo to stop"
+            echo "  Run: sudo systemctl stop llama-server"
+        fi
     fi
 
-    # Find and kill llama-server processes
-    pkill -f llama-server || true
-    log "All llama-server processes stopped"
+    # Find and kill llama-server processes owned by current user
+    pkill -u "$(whoami)" -f llama-server || true
+    log "All user llama-server processes stopped"
 }
 
 backup_old_binaries() {
@@ -326,9 +326,17 @@ install_new_binaries() {
         log "New static libraries installed"
     fi
 
-    # Create symlinks
-    ln -sf "$CURRENT_INSTALL_DIR/bin/llama-server" /usr/local/bin/llama-server
-    ln -sf "$CURRENT_INSTALL_DIR/bin/llama-cli" /usr/local/bin/llama-cli
+    # Create symlinks in ~/.local/bin
+    local bin_dir="$HOME/.local/bin"
+    mkdir -p "$bin_dir"
+    ln -sf "$CURRENT_INSTALL_DIR/bin/llama-server" "$bin_dir/llama-server"
+    ln -sf "$CURRENT_INSTALL_DIR/bin/llama-cli" "$bin_dir/llama-cli"
+
+    # Check if ~/.local/bin is in PATH
+    if [[ ":$PATH:" != *":$bin_dir:"* ]]; then
+        warning "$bin_dir is not in your PATH"
+        echo "  Add it by running: export PATH=\"\$HOME/.local/bin:\$PATH\""
+    fi
 
     log "Installation completed"
 }
@@ -358,12 +366,14 @@ restore_configuration() {
 create_config() {
     log "Creating default configuration..."
 
+    mkdir -p "$CURRENT_INSTALL_DIR/config"
+
     cat > "$CURRENT_INSTALL_DIR/config/default.yaml" <<EOF
 # Llama.cpp Configuration
 # This file contains default configuration settings
 
 # Model settings
-model_path: "/opt/llama-cpp/models"
+model_path: "$CURRENT_INSTALL_DIR/models"
 model_name: ""
 model_file: ""
 
@@ -382,39 +392,13 @@ batch_size: 512
 
 # Logging
 log_level: "info"
-log_file: "/opt/llama-cpp/logs/llama-server.log"
+log_file: "$CURRENT_INSTALL_DIR/logs/llama-server.log"
 
 # Unified Memory for CUDA
 unified_memory: true
 EOF
 
     log "Configuration file created"
-}
-
-create_service() {
-    log "Creating systemd service..."
-
-    cat > /etc/systemd/system/llama-server.service <<EOF
-[Unit]
-Description=Llama.cpp Server
-After=network.target
-
-[Service]
-Type=simple
-User=llama
-Group=llama
-WorkingDirectory=/opt/llama-cpp
-Environment="PATH=/usr/local/bin:\${PATH}"
-ExecStart=/usr/local/bin/llama-server --config /opt/llama-cpp/config/default.yaml
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    systemctl daemon-reload
-    log "Systemd service created"
 }
 
 verify_installation() {
@@ -477,10 +461,8 @@ main() {
     echo "=========================================="
     echo ""
 
-    # Check root
-    check_root
-
-    # Create log file
+    # Create log directory and file
+    mkdir -p "$LOG_DIR"
     touch "$LOG_FILE"
 
     # Check if installation exists
@@ -522,9 +504,6 @@ main() {
         create_config
     fi
 
-    # Create service
-    create_service
-
     # Verify installation
     verify_installation
 
@@ -545,16 +524,8 @@ main() {
     echo "  llama-server --help"
     echo "  llama-server --model /path/to/model.gguf"
     echo ""
-    echo "To start the server as a service:"
-    echo "  sudo systemctl start llama-server"
-    echo "  sudo systemctl enable llama-server"
-    echo ""
-    echo "To see the logs:"
-    echo "  sudo journalctl -u llama-server -f"
-    echo ""
     echo "If you encounter any issues, restore from backup:"
-    echo "  sudo systemctl stop llama-server"
-    echo "  sudo tar -xzf $BACKUP_DIR/llama-cpp-backup-*.tar.gz -C /opt"
+    echo "  tar -xzf $BACKUP_DIR/llama-cpp-backup-*.tar.gz -C $CURRENT_INSTALL_DIR"
     echo ""
     echo "See $LOG_FILE for detailed upgrade logs"
 }

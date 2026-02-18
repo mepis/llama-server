@@ -13,9 +13,9 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-CONFIG_DIR="${CONFIG_DIR:-/opt/llama-cpp/config}"
-MODELS_DIR="${MODELS_DIR:-/opt/llama-cpp/models}"
-LOG_DIR="${LOG_DIR:-/opt/llama-cpp/logs}"
+CONFIG_DIR="${CONFIG_DIR:-$HOME/.local/llama-cpp/config}"
+MODELS_DIR="${MODELS_DIR:-$HOME/.local/llama-cpp/models}"
+LOG_DIR="${LOG_DIR:-$HOME/.local/llama-cpp/logs}"
 PID_FILE="${PID_FILE:-/tmp/llama-server.pid}"
 PORT="${PORT:-8080}"
 HOST="${HOST:-0.0.0.0}"
@@ -149,9 +149,9 @@ show_help() {
     echo "  --help, -h             Show this help message"
     echo ""
     echo "Examples:"
-    echo "  llama-server --model /opt/llama-cpp/models/model.gguf --ngl 99"
+    echo "  llama-server --model ~/.local/llama-cpp/models/model.gguf --ngl 99"
     echo "  llama-server --hf meta-llama/Llama-2-7b-chat-hf --port 8081"
-    echo "  llama-server --config /opt/llama-cpp/config/server.yaml --daemon"
+    echo "  llama-server --config ~/.local/llama-cpp/config/server.yaml --daemon"
     echo ""
 }
 
@@ -245,7 +245,7 @@ check_dependencies() {
 
     local missing_deps=()
 
-    if [ ! -f "/usr/local/bin/llama-server" ] && [ ! -f "/opt/llama-cpp/bin/llama-server" ]; then
+    if [ ! -f "$HOME/.local/bin/llama-server" ] && [ ! -f "$HOME/.local/llama-cpp/bin/llama-server" ] && [ ! -f "/usr/local/bin/llama-server" ]; then
         missing_deps+=("llama-server binary")
     fi
 
@@ -311,10 +311,10 @@ list_devices() {
 }
 
 check_version() {
-    if [ -f "/usr/local/bin/llama-server" ]; then
+    if [ -f "$HOME/.local/llama-cpp/bin/llama-server" ]; then
+        llama_server="$HOME/.local/llama-cpp/bin/llama-server"
+    elif [ -f "/usr/local/bin/llama-server" ]; then
         llama_server="/usr/local/bin/llama-server"
-    elif [ -f "/opt/llama-cpp/bin/llama-server" ]; then
-        llama_server="/opt/llama-cpp/bin/llama-server"
     else
         llama_server=$(which llama-server)
     fi
@@ -330,10 +330,10 @@ build_command() {
     local cmd="llama-server"
 
     # Check which binary to use
-    if [ -f "/usr/local/bin/llama-server" ]; then
+    if [ -f "$HOME/.local/llama-cpp/bin/llama-server" ]; then
+        cmd="$HOME/.local/llama-cpp/bin/llama-server"
+    elif [ -f "/usr/local/bin/llama-server" ]; then
         cmd="/usr/local/bin/llama-server"
-    elif [ -f "/opt/llama-cpp/bin/llama-server" ]; then
-        cmd="/opt/llama-cpp/bin/llama-server"
     fi
 
     # Add arguments

@@ -14,8 +14,8 @@ NC='\033[0m' # No Color
 
 # Configuration
 PID_FILE="${PID_FILE:-/tmp/llama-server.pid}"
-LOG_DIR="${LOG_DIR:-/opt/llama-cpp/logs}"
-INSTALL_DIR="${INSTALL_DIR:-/opt/llama-cpp}"
+LOG_DIR="${LOG_DIR:-$HOME/.local/llama-cpp/logs}"
+INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/llama-cpp}"
 
 # Functions
 log() {

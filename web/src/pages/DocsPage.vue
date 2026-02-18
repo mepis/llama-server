@@ -23,8 +23,8 @@ function scrollTo(id) {
 const commonErrors = [
   {
     problem: 'llama-server binary not found',
-    solution: 'Run the install script first: sudo ./scripts/install/install-lamacpp.sh',
-    code: 'which llama-server\nls /opt/llama-cpp/bin/llama-server',
+    solution: 'Run the install script first: ./scripts/install/install-lamacpp.sh',
+    code: 'which llama-server\nls ~/.local/llama-cpp/bin/llama-server',
   },
   {
     problem: 'Port 8080 already in use',
@@ -141,7 +141,7 @@ const extDocs = [
             <div v-for="(step, i) in [
               { label: 'Clone the repository', code: 'git clone https://github.com/mepis/llama-server.git\ncd llama-server' },
               { label: 'Detect your hardware', code: './scripts/detect-hardware.sh' },
-              { label: 'Install Llama.cpp', code: 'sudo ./scripts/install/install-lamacpp.sh' },
+              { label: 'Install Llama.cpp', code: './scripts/install/install-lamacpp.sh' },
               { label: 'Run a model from HuggingFace', code: '# Downloads and runs automatically\n./scripts/launch/launch-lamacpp.sh \\\n  --hf bartowski/Llama-3.2-3B-Instruct-GGUF \\\n  --ngl 99' },
               { label: 'Or use the unified interface', code: './scripts/llama.sh' },
             ]" :key="step.label" class="flex gap-4">
@@ -157,20 +157,19 @@ const extDocs = [
         <!-- Installation -->
         <section id="install">
           <h2 class="text-2xl font-bold text-gray-900 mb-4">Installation</h2>
-          <p class="text-gray-600 mb-6">The installation script detects your platform and hardware, installs only the necessary dependencies, builds from source, and optionally creates a systemd service.</p>
-          <CodeBlock code="# Standard install (requires sudo)
-sudo ./scripts/install/install-lamacpp.sh
+          <p class="text-gray-600 mb-6">The installation script detects your platform and hardware, checks for required dependencies, builds from source, and installs to your home directory. No sudo required.</p>
+          <CodeBlock code="# Standard install (no sudo needed)
+./scripts/install/install-lamacpp.sh
 
 # Custom install directory
-INSTALL_DIR=/usr/local/llama sudo ./scripts/install/install-lamacpp.sh
+INSTALL_DIR=~/llama ./scripts/install/install-lamacpp.sh
 
 # Default installed paths:
-# Binaries: /opt/llama-cpp/bin/
-# Symlinks: /usr/local/bin/llama-server
-# Config:   /opt/llama-cpp/config/default.yaml
-# Models:   /opt/llama-cpp/models/
-# Logs:     /opt/llama-cpp/logs/
-# Service:  /etc/systemd/system/llama-server.service" lang="bash" />
+# Binaries: ~/.local/llama-cpp/bin/
+# Symlinks: ~/.local/bin/llama-server
+# Config:   ~/.local/llama-cpp/config/default.yaml
+# Models:   ~/.local/llama-cpp/models/
+# Logs:     ~/.local/llama-cpp/logs/" lang="bash" />
 
           <div class="mt-6 grid sm:grid-cols-2 gap-4">
             <div v-for="plat in ['Ubuntu/Debian (apt)', 'Fedora/RHEL (dnf)', 'Arch/Manjaro (pacman)', 'macOS (Homebrew)']" :key="plat" class="flex items-center gap-2 text-sm bg-white border border-gray-100 rounded-lg px-4 py-3">

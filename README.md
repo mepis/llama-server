@@ -228,8 +228,8 @@ unified_memory: true
 
 ### Environment Variables
 
-- `INSTALL_DIR` - Installation directory (default: /opt/llama-cpp)
-- `BUILD_DIR` - Build directory (default: /tmp/llama-cpp-build)
+- `INSTALL_DIR` - Installation directory (default: ~/.local/llama-cpp)
+- `BUILD_DIR` - Build directory (default: ~/.local/llama-cpp/build)
 - `LOG_FILE` - Log file path
 - `PORT` - Server port (default: 8080)
 - `HOST` - Server host (default: 0.0.0.0)
