@@ -66,7 +66,7 @@ check_dependencies() {
 
     log "Checking core build dependencies..."
 
-    for cmd in git cmake gcc g++ make wget curl; do
+    for cmd in git cmake pkg-config gcc g++ make wget curl; do
         if ! command -v "$cmd" &> /dev/null; then
             missing_deps+=("$cmd")
         fi
@@ -78,19 +78,19 @@ check_dependencies() {
         echo "Please install them using your package manager:"
         case "$platform" in
             ubuntu|debian)
-                echo "  sudo apt-get update && sudo apt-get install -y git cmake build-essential wget curl libssl-dev"
+                echo "  sudo apt-get update && sudo apt-get install -y git cmake pkg-config build-essential wget curl libssl-dev"
                 ;;
             fedora|rhel|rocky|almalinux)
-                echo "  sudo dnf install -y git cmake gcc gcc-c++ make wget curl openssl-devel"
+                echo "  sudo dnf install -y git cmake pkgconf-pkg-config gcc gcc-c++ make wget curl openssl-devel"
                 ;;
             arch|manjaro)
-                echo "  sudo pacman -Sy --noconfirm git cmake base-devel wget curl openssl"
+                echo "  sudo pacman -Sy --noconfirm git cmake pkgconf base-devel wget curl openssl"
                 ;;
             alpine)
-                echo "  sudo apk add --no-cache git cmake build-base wget curl openssl-dev"
+                echo "  sudo apk add --no-cache git cmake pkgconf build-base wget curl openssl-dev"
                 ;;
             macos)
-                echo "  brew install cmake git wget curl"
+                echo "  brew install cmake pkg-config git wget curl"
                 ;;
         esac
         echo ""

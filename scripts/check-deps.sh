@@ -80,13 +80,14 @@ echo ""
 echo "Core Build Tools"
 echo "─────────────────────────────────────────"
 
-check_cmd git   "git"   "version control"       || MISSING_CORE+=(git)
-check_cmd cmake "cmake" "build system generator" || MISSING_CORE+=(cmake)
-check_cmd gcc   "gcc"   "C compiler"             || MISSING_CORE+=(gcc)
-check_cmd g++   "g++"   "C++ compiler"           || MISSING_CORE+=(g++)
-check_cmd make  "make"  "build automation"        || MISSING_CORE+=(make)
-check_cmd wget  "wget"  "file downloader"         || MISSING_CORE+=(wget)
-check_cmd curl  "curl"  "data transfer"           || MISSING_CORE+=(curl)
+check_cmd git        "git"        "version control"       || MISSING_CORE+=(git)
+check_cmd cmake      "cmake"      "build system generator" || MISSING_CORE+=(cmake)
+check_cmd pkg-config "pkg-config" "library discovery tool" || MISSING_CORE+=(pkg-config)
+check_cmd gcc        "gcc"        "C compiler"             || MISSING_CORE+=(gcc)
+check_cmd g++        "g++"        "C++ compiler"           || MISSING_CORE+=(g++)
+check_cmd make       "make"       "build automation"       || MISSING_CORE+=(make)
+check_cmd wget       "wget"       "file downloader"        || MISSING_CORE+=(wget)
+check_cmd curl       "curl"       "data transfer"          || MISSING_CORE+=(curl)
 
 echo ""
 
@@ -265,6 +266,7 @@ build_package_list() {
                 case "$dep" in
                     git)         pkgs+=(git) ;;
                     cmake)       pkgs+=(cmake) ;;
+                    pkg-config)  pkgs+=(pkg-config) ;;
                     gcc)         pkgs+=(build-essential) ;;
                     g++)         pkgs+=(build-essential) ;;
                     make)        pkgs+=(build-essential) ;;
@@ -278,6 +280,7 @@ build_package_list() {
                 case "$dep" in
                     git)         pkgs+=(git) ;;
                     cmake)       pkgs+=(cmake) ;;
+                    pkg-config)  pkgs+=(pkgconf-pkg-config) ;;
                     gcc)         pkgs+=(gcc) ;;
                     g++)         pkgs+=(gcc-c++) ;;
                     make)        pkgs+=(make) ;;
@@ -291,6 +294,7 @@ build_package_list() {
                 case "$dep" in
                     git)         pkgs+=(git) ;;
                     cmake)       pkgs+=(cmake) ;;
+                    pkg-config)  pkgs+=(pkgconf) ;;
                     gcc|g++|make) pkgs+=(base-devel) ;;
                     wget)        pkgs+=(wget) ;;
                     curl)        pkgs+=(curl) ;;
@@ -302,6 +306,7 @@ build_package_list() {
                 case "$dep" in
                     git)         pkgs+=(git) ;;
                     cmake)       pkgs+=(cmake) ;;
+                    pkg-config)  pkgs+=(pkgconf) ;;
                     gcc|g++|make) pkgs+=(build-base) ;;
                     wget)        pkgs+=(wget) ;;
                     curl)        pkgs+=(curl) ;;
@@ -313,6 +318,7 @@ build_package_list() {
                 case "$dep" in
                     git)         pkgs+=(git) ;;
                     cmake)       pkgs+=(cmake) ;;
+                    pkg-config)  pkgs+=(pkg-config) ;;
                     wget)        pkgs+=(wget) ;;
                     curl)        pkgs+=(curl) ;;
                     blas)        pkgs+=(openblas) ;;

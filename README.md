@@ -1,3 +1,9 @@
+### WARNING
+
+Llama.cpp Management Suite was developed with heavy assitance using LLMs. Humans (me) operated as a project manager, applying corrections where necessary and testing as needed. Code reviews are performed occasionally.
+
+Llama.cpp Management Suite is a hobby project created as a tool for myself. Thorough testing is not performed. Please be aware of this. Traditional development practices may not be followed.
+
 # Llama.cpp Management Suite
 
 A comprehensive set of bash scripts for installing, compiling, upgrading, launching, and managing Llama.cpp on various hardware configurations.
@@ -90,6 +96,7 @@ sudo ./install/install-lamacpp.sh
 ```
 
 This will:
+
 - Detect your hardware
 - Install dependencies
 - Download and compile Llama.cpp
@@ -103,6 +110,7 @@ This will:
 ```
 
 Choose from options:
+
 - All backends (recommended)
 - CPU only
 - CUDA (Nvidia GPU)
@@ -118,6 +126,7 @@ sudo ./upgrade/upgrade-lamacpp.sh
 ```
 
 This will:
+
 - Backup your current installation
 - Download latest version
 - Compile with same/hardware-specific settings
@@ -174,6 +183,7 @@ sudo ./terminate/terminate-lamacpp.sh
 ```
 
 This will:
+
 - Terminate all Llama.cpp instances
 - Free GPU memory
 - Clear CPU cache
@@ -187,6 +197,7 @@ This will:
 ```
 
 Displays:
+
 - CPU information
 - GPU information
 - Memory status
@@ -211,7 +222,7 @@ port: 8080
 ssl: false
 
 # Hardware settings
-ngl: 99  # Number of GPU layers to offload
+ngl: 99 # Number of GPU layers to offload
 context_size: 2048
 
 # Performance settings
@@ -237,26 +248,31 @@ unified_memory: true
 ## Supported Hardware
 
 ### Nvidia
+
 - CUDA support with Unified Memory
 - Automatic compute capability detection
 - Optional MMQ and cuBLAS kernels
 
 ### AMD
+
 - ROCm support
 - Automatic GPU target detection
 - Optional rocWMMA support
 
 ### Apple Silicon
+
 - Metal support
 - Automatic device detection
 - Optimized for Apple M-series chips
 
 ### Intel
+
 - OpenVINO support
 - oneMKL support
 - ZenDNN support
 
 ### Cross-Platform
+
 - Vulkan support
 - WebGPU (experimental)
 - CPU with various instruction sets (AVX2, AVX-512, ARM NEON)
@@ -328,6 +344,7 @@ This project is provided as-is for educational and personal use. Please refer to
 ## Support
 
 For issues and questions:
+
 - Check the troubleshooting section above
 - Review the [Llama.cpp documentation](https://github.com/ggml-org/llama.cpp)
 - Check the progress.md file for detailed project status
@@ -336,6 +353,7 @@ For issues and questions:
 ## Changelog
 
 ### Version 1.0.0 (February 16, 2026)
+
 - Initial release
 - Core scripts implemented
 - Hardware detection
