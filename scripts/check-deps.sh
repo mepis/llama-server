@@ -186,10 +186,35 @@ if lspci 2>/dev/null | grep -qiE "VGA|3D|Display"; then
 fi
 
 if [ "$HAS_ANY_GPU" = true ]; then
-    if command -v vulkaninfo &> /dev/null; then
-        ok "vulkaninfo (Vulkan runtime)"
+    VULKAN_DEV=false
+    VULKAN_GLSLANG=false
+
+    # Check for Vulkan dev headers (libvulkan-dev / vulkan-loader-devel / etc.)
+    if command -v pkg-config &> /dev/null && pkg-config --exists vulkan 2>/dev/null; then
+        VULKAN_DEV=true
+    elif [ -f /usr/include/vulkan/vulkan.h ] || [ -f /usr/local/include/vulkan/vulkan.h ]; then
+        VULKAN_DEV=true
+    elif ldconfig -p 2>/dev/null | grep -q libvulkan; then
+        VULKAN_DEV=true
+    fi
+
+    # Check for glslang compiler (glslang-tools / glslang / shaderc)
+    if command -v glslangValidator &> /dev/null || command -v glslc &> /dev/null; then
+        VULKAN_GLSLANG=true
+    fi
+
+    if [ "$VULKAN_DEV" = true ] && [ "$VULKAN_GLSLANG" = true ]; then
+        ok "Vulkan development libraries and shader compiler"
+    elif [ "$VULKAN_DEV" = true ]; then
+        ok "Vulkan development libraries"
+        miss "glslangValidator/glslc" "Vulkan shader compiler"
+        MISSING_GPU+=(vulkan-glslang)
+    elif [ "$VULKAN_GLSLANG" = true ]; then
+        miss "Vulkan dev headers" "Vulkan development libraries"
+        MISSING_GPU+=(vulkan-dev)
+        ok "Vulkan shader compiler"
     else
-        miss "vulkaninfo" "Vulkan development packages"
+        miss "Vulkan" "Vulkan development packages"
         MISSING_GPU+=(vulkan)
     fi
 else
@@ -337,29 +362,35 @@ build_gpu_package_list() {
         case "$platform" in
             debian)
                 case "$dep" in
-                    nvidia-driver) pkgs+=(nvidia-driver) ;;
-                    cuda-toolkit)  pkgs+=(nvidia-cuda-toolkit) ;;
-                    rocm)          pkgs+=(rocm-dev) ;;
-                    hip)           pkgs+=(hip-dev) ;;
-                    vulkan)        pkgs+=(libvulkan-dev glslang-tools) ;;
+                    nvidia-driver)  pkgs+=(nvidia-driver) ;;
+                    cuda-toolkit)   pkgs+=(nvidia-cuda-toolkit) ;;
+                    rocm)           pkgs+=(rocm-dev) ;;
+                    hip)            pkgs+=(hip-dev) ;;
+                    vulkan)         pkgs+=(libvulkan-dev glslang-tools) ;;
+                    vulkan-dev)     pkgs+=(libvulkan-dev) ;;
+                    vulkan-glslang) pkgs+=(glslang-tools) ;;
                 esac
                 ;;
             fedora)
                 case "$dep" in
-                    nvidia-driver) pkgs+=(akmod-nvidia) ;;
-                    cuda-toolkit)  pkgs+=(cuda) ;;
-                    rocm)          pkgs+=(rocm-dev) ;;
-                    hip)           pkgs+=(hip-devel) ;;
-                    vulkan)        pkgs+=(vulkan-loader-devel glslang) ;;
+                    nvidia-driver)  pkgs+=(akmod-nvidia) ;;
+                    cuda-toolkit)   pkgs+=(cuda) ;;
+                    rocm)           pkgs+=(rocm-dev) ;;
+                    hip)            pkgs+=(hip-devel) ;;
+                    vulkan)         pkgs+=(vulkan-loader-devel glslang) ;;
+                    vulkan-dev)     pkgs+=(vulkan-loader-devel) ;;
+                    vulkan-glslang) pkgs+=(glslang) ;;
                 esac
                 ;;
             arch)
                 case "$dep" in
-                    nvidia-driver) pkgs+=(nvidia) ;;
-                    cuda-toolkit)  pkgs+=(cuda) ;;
-                    rocm)          pkgs+=(rocm-hip-sdk) ;;
-                    hip)           pkgs+=(rocm-hip-sdk) ;;
-                    vulkan)        pkgs+=(vulkan-icd-loader vulkan-headers shaderc) ;;
+                    nvidia-driver)  pkgs+=(nvidia) ;;
+                    cuda-toolkit)   pkgs+=(cuda) ;;
+                    rocm)           pkgs+=(rocm-hip-sdk) ;;
+                    hip)            pkgs+=(rocm-hip-sdk) ;;
+                    vulkan)         pkgs+=(vulkan-icd-loader vulkan-headers shaderc) ;;
+                    vulkan-dev)     pkgs+=(vulkan-icd-loader vulkan-headers) ;;
+                    vulkan-glslang) pkgs+=(shaderc) ;;
                 esac
                 ;;
             macos)
