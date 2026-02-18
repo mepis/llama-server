@@ -176,6 +176,40 @@ build_lamacpp() {
     if command -v nvidia-smi &> /dev/null; then
         log "Adding CUDA support..."
         cmake_args="$cmake_args -DGGML_CUDA=ON"
+
+        # Detect CUDA toolkit version and set compatible architectures
+        # to avoid targeting GPU archs newer than what nvcc supports
+        if command -v nvcc &> /dev/null; then
+            local cuda_ver
+            cuda_ver=$(nvcc --version | grep -oP 'release \K[0-9]+\.[0-9]+')
+            local cuda_major=${cuda_ver%%.*}
+            local cuda_minor=${cuda_ver#*.}
+            log "Detected CUDA toolkit version: $cuda_ver"
+
+            # Map CUDA version to max supported architecture
+            local cuda_archs=""
+            if [ "$cuda_major" -ge 13 ] || { [ "$cuda_major" -eq 12 ] && [ "$cuda_minor" -ge 8 ]; }; then
+                # CUDA 12.8+ supports compute_120a (Blackwell)
+                cuda_archs="60;70;75;80;86;89;90;100;120"
+            elif [ "$cuda_major" -eq 12 ] && [ "$cuda_minor" -ge 6 ]; then
+                # CUDA 12.6-12.7 supports up to compute_100a (Thorpe)
+                cuda_archs="60;70;75;80;86;89;90;100"
+            elif [ "$cuda_major" -eq 12 ] && [ "$cuda_minor" -ge 4 ]; then
+                # CUDA 12.4-12.5 supports up to compute_90a (Hopper)
+                cuda_archs="60;70;75;80;86;89;90"
+            elif [ "$cuda_major" -eq 12 ]; then
+                # CUDA 12.0-12.3
+                cuda_archs="60;70;75;80;86;89;90"
+            elif [ "$cuda_major" -eq 11 ]; then
+                # CUDA 11.x supports up to compute_86
+                cuda_archs="60;70;75;80;86"
+            else
+                cuda_archs="60;70;75"
+            fi
+
+            cmake_args="$cmake_args -DCMAKE_CUDA_ARCHITECTURES=$cuda_archs"
+            log "Setting CUDA architectures: $cuda_archs"
+        fi
     fi
 
     if command -v rocm-smi &> /dev/null && command -v hipconfig &> /dev/null; then
@@ -183,7 +217,10 @@ build_lamacpp() {
         cmake_args="$cmake_args -DGGML_HIP=ON"
     fi
 
-    if command -v vulkaninfo &> /dev/null; then
+    if command -v pkg-config &> /dev/null && pkg-config --exists vulkan 2>/dev/null; then
+        log "Adding Vulkan support..."
+        cmake_args="$cmake_args -DGGML_VULKAN=ON"
+    elif [ -f /usr/include/vulkan/vulkan.h ] || [ -f /usr/local/include/vulkan/vulkan.h ]; then
         log "Adding Vulkan support..."
         cmake_args="$cmake_args -DGGML_VULKAN=ON"
     fi

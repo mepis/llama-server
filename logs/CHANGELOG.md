@@ -1,5 +1,33 @@
 # Llama.cpp Management Suite - Update History
 
+## [Pending] - 2026-02-18 - Fixed CUDA architecture compatibility
+
+Fixed `nvcc fatal: Unsupported gpu architecture 'compute_120a'` build error.
+All three build scripts (install, compile, upgrade) now detect the installed
+CUDA toolkit version and set `CMAKE_CUDA_ARCHITECTURES` to only target
+architectures supported by the installed `nvcc`. Also fixed Vulkan detection
+in the install script to check for dev headers via pkg-config and header
+files instead of relying on the `vulkaninfo` binary.
+
+**Files changed:** scripts/install/install-lamacpp.sh,
+scripts/compile/compile-lamacpp.sh, scripts/upgrade/upgrade-lamacpp.sh
+
+---
+
+## [a350acf] - 2026-02-18 - Updated dependency script, added changelog
+
+Improved Vulkan detection in `check-deps.sh` to check for dev headers
+(pkg-config, `/usr/include/vulkan/vulkan.h`, ldconfig) and shader compilers
+(`glslangValidator`, `glslc`) instead of only the `vulkaninfo` binary.
+Added granular Vulkan package mapping (`vulkan-dev`, `vulkan-glslang`).
+Created project changelog at `logs/update_history/CHANGELOG.md`. Updated
+`.gitignore`.
+
+**Files changed:** .gitignore, logs/update_history/CHANGELOG.md (new),
+scripts/check-deps.sh
+
+---
+
 ## [04c3e8b] - 2026-02-18 - Updated readme
 
 Updated README with improved project documentation. Added `pkg-config` to

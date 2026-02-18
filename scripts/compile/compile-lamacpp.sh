@@ -195,6 +195,33 @@ configure_build() {
                 if command -v nvidia-smi &> /dev/null; then
                     log "Enabling CUDA support..."
                     cmake_args="$cmake_args -DGGML_CUDA=ON"
+
+                    # Set compatible CUDA architectures based on toolkit version
+                    if command -v nvcc &> /dev/null; then
+                        local cuda_ver
+                        cuda_ver=$(nvcc --version | grep -oP 'release \K[0-9]+\.[0-9]+')
+                        local cuda_major=${cuda_ver%%.*}
+                        local cuda_minor=${cuda_ver#*.}
+                        log "Detected CUDA toolkit version: $cuda_ver"
+
+                        local cuda_archs=""
+                        if [ "$cuda_major" -ge 13 ] || { [ "$cuda_major" -eq 12 ] && [ "$cuda_minor" -ge 8 ]; }; then
+                            cuda_archs="60;70;75;80;86;89;90;100;120"
+                        elif [ "$cuda_major" -eq 12 ] && [ "$cuda_minor" -ge 6 ]; then
+                            cuda_archs="60;70;75;80;86;89;90;100"
+                        elif [ "$cuda_major" -eq 12 ] && [ "$cuda_minor" -ge 4 ]; then
+                            cuda_archs="60;70;75;80;86;89;90"
+                        elif [ "$cuda_major" -eq 12 ]; then
+                            cuda_archs="60;70;75;80;86;89;90"
+                        elif [ "$cuda_major" -eq 11 ]; then
+                            cuda_archs="60;70;75;80;86"
+                        else
+                            cuda_archs="60;70;75"
+                        fi
+
+                        cmake_args="$cmake_args -DCMAKE_CUDA_ARCHITECTURES=$cuda_archs"
+                        log "Setting CUDA architectures: $cuda_archs"
+                    fi
                 else
                     warning "CUDA not detected, skipping CUDA support"
                 fi
