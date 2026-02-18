@@ -219,7 +219,7 @@ configure_build() {
                             cuda_archs="60;70;75"
                         fi
 
-                        cmake_args="$cmake_args -DCMAKE_CUDA_ARCHITECTURES=$cuda_archs"
+                        cmake_args="$cmake_args -DCMAKE_CUDA_ARCHITECTURES='$cuda_archs'"
                         log "Setting CUDA architectures: $cuda_archs"
                     fi
                 else
