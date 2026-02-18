@@ -62,6 +62,7 @@ const features = [
 </script>
 
 <template>
+  <div>
   <!-- Hero -->
   <section class="relative overflow-hidden bg-white">
     <!-- Background decoration -->
@@ -226,4 +227,5 @@ const features = [
   </section>
 
   <ScriptModal :script="selectedScript" @close="selectedScript = null" />
+  </div>
 </template>

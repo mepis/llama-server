@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import CodeBlock from './CodeBlock.vue'
 import TerminalOutput from './TerminalOutput.vue'
 
@@ -47,10 +47,16 @@ function onKey(e) {
   if (e.key === 'Escape') emit('close')
 }
 
-onMounted(() => {
-  document.addEventListener('keydown', onKey)
-  document.body.style.overflow = 'hidden'
-  activeTab.value = 'docs'
+watch(() => props.script, (val) => {
+  if (val) {
+    document.addEventListener('keydown', onKey)
+    document.body.style.overflow = 'hidden'
+    activeTab.value = 'docs'
+  } else {
+    document.removeEventListener('keydown', onKey)
+    document.body.style.overflow = ''
+    sseUrl.value = null
+  }
 })
 
 onUnmounted(() => {

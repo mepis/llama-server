@@ -15,6 +15,11 @@ const sections = [
 
 const active = ref('overview')
 
+function scrollTo(id) {
+  active.value = id
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
+}
+
 const commonErrors = [
   {
     problem: 'llama-server binary not found',
@@ -82,7 +87,7 @@ const extDocs = [
             v-for="s in sections"
             :key="s.id"
             :href="`#${s.id}`"
-            @click.prevent="active = s.id; document.getElementById(s.id)?.scrollIntoView({ behavior: 'smooth' })"
+            @click.prevent="scrollTo(s.id)"
             class="block px-3 py-2 text-sm rounded-lg transition-all"
             :class="active === s.id
               ? 'bg-mint-50 text-mint-700 font-medium'
