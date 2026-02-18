@@ -1,5 +1,5 @@
 import { createApp } from 'vue'
-import { createRouter, createWebHashHistory } from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router'
 import './style.css'
 import App from './App.vue'
 
@@ -9,7 +9,7 @@ import HardwarePage from './pages/HardwarePage.vue'
 import DocsPage from './pages/DocsPage.vue'
 
 const router = createRouter({
-  history: createWebHashHistory(),
+  history: createWebHistory(),
   routes: [
     { path: '/', component: HomePage },
     { path: '/scripts', component: ScriptsPage },
