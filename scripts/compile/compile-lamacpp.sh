@@ -239,11 +239,25 @@ configure_build() {
                 fi
                 ;;
             Vulkan)
-                if command -v vulkaninfo &> /dev/null; then
+                local vk_dev=false
+                local vk_shader=false
+                if command -v pkg-config &> /dev/null && pkg-config --exists vulkan 2>/dev/null; then
+                    vk_dev=true
+                elif [ -f /usr/include/vulkan/vulkan.h ] || [ -f /usr/local/include/vulkan/vulkan.h ]; then
+                    vk_dev=true
+                elif ldconfig -p 2>/dev/null | grep -q libvulkan; then
+                    vk_dev=true
+                fi
+                if command -v glslc &> /dev/null || command -v glslangValidator &> /dev/null; then
+                    vk_shader=true
+                fi
+                if [ "$vk_dev" = true ] && [ "$vk_shader" = true ]; then
                     log "Enabling Vulkan support..."
                     cmake_args="$cmake_args -DGGML_VULKAN=ON"
+                elif [ "$vk_dev" = true ]; then
+                    warning "Vulkan headers found but shader compiler (glslc/glslangValidator) missing. Skipping Vulkan."
                 else
-                    warning "Vulkan not detected, skipping Vulkan support"
+                    warning "Vulkan dev libraries not detected, skipping Vulkan support"
                 fi
                 ;;
             Metal)
