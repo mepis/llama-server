@@ -198,16 +198,17 @@ if [ "$HAS_ANY_GPU" = true ]; then
         VULKAN_DEV=true
     fi
 
-    # Check for glslang compiler (glslang-tools / glslang / shaderc)
-    if command -v glslangValidator &> /dev/null || command -v glslc &> /dev/null; then
+    # Check for glslc shader compiler (from shaderc/glslc package)
+    # Note: glslangValidator (from glslang-tools) is NOT sufficient — CMake requires glslc
+    if command -v glslc &> /dev/null; then
         VULKAN_GLSLANG=true
     fi
 
     if [ "$VULKAN_DEV" = true ] && [ "$VULKAN_GLSLANG" = true ]; then
-        ok "Vulkan development libraries and shader compiler"
+        ok "Vulkan development libraries and glslc shader compiler"
     elif [ "$VULKAN_DEV" = true ]; then
         ok "Vulkan development libraries"
-        miss "glslangValidator/glslc" "Vulkan shader compiler"
+        miss "glslc" "Vulkan shader compiler (required by CMake)"
         MISSING_GPU+=(vulkan-glslang)
     elif [ "$VULKAN_GLSLANG" = true ]; then
         miss "Vulkan dev headers" "Vulkan development libraries"
@@ -366,9 +367,9 @@ build_gpu_package_list() {
                     cuda-toolkit)   pkgs+=(nvidia-cuda-toolkit) ;;
                     rocm)           pkgs+=(rocm-dev) ;;
                     hip)            pkgs+=(hip-dev) ;;
-                    vulkan)         pkgs+=(libvulkan-dev glslang-tools) ;;
+                    vulkan)         pkgs+=(libvulkan-dev glslc) ;;
                     vulkan-dev)     pkgs+=(libvulkan-dev) ;;
-                    vulkan-glslang) pkgs+=(glslang-tools) ;;
+                    vulkan-glslang) pkgs+=(glslc) ;;
                 esac
                 ;;
             fedora)
@@ -377,9 +378,9 @@ build_gpu_package_list() {
                     cuda-toolkit)   pkgs+=(cuda) ;;
                     rocm)           pkgs+=(rocm-dev) ;;
                     hip)            pkgs+=(hip-devel) ;;
-                    vulkan)         pkgs+=(vulkan-loader-devel glslang) ;;
+                    vulkan)         pkgs+=(vulkan-loader-devel glslc) ;;
                     vulkan-dev)     pkgs+=(vulkan-loader-devel) ;;
-                    vulkan-glslang) pkgs+=(glslang) ;;
+                    vulkan-glslang) pkgs+=(glslc) ;;
                 esac
                 ;;
             arch)

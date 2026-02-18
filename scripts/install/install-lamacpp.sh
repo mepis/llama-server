@@ -217,9 +217,9 @@ build_lamacpp() {
         cmake_args="$cmake_args -DGGML_HIP=ON"
     fi
 
-    # Vulkan requires both dev headers and a shader compiler (glslc or glslangValidator)
+    # Vulkan requires dev headers AND the glslc shader compiler (from shaderc)
+    # Note: glslangValidator (from glslang-tools) is NOT sufficient — CMake requires glslc
     local vulkan_dev=false
-    local vulkan_glslang=false
 
     if command -v pkg-config &> /dev/null && pkg-config --exists vulkan 2>/dev/null; then
         vulkan_dev=true
@@ -229,16 +229,12 @@ build_lamacpp() {
         vulkan_dev=true
     fi
 
-    if command -v glslc &> /dev/null || command -v glslangValidator &> /dev/null; then
-        vulkan_glslang=true
-    fi
-
-    if [ "$vulkan_dev" = true ] && [ "$vulkan_glslang" = true ]; then
+    if [ "$vulkan_dev" = true ] && command -v glslc &> /dev/null; then
         log "Adding Vulkan support..."
         cmake_args="$cmake_args -DGGML_VULKAN=ON"
     elif [ "$vulkan_dev" = true ]; then
-        warning "Vulkan headers found but shader compiler (glslc/glslangValidator) missing. Skipping Vulkan."
-        warning "Install with: sudo apt-get install glslang-tools (Ubuntu/Debian)"
+        warning "Vulkan dev headers found but glslc shader compiler missing. Skipping Vulkan."
+        warning "Install with: sudo apt-get install glslc (Ubuntu/Debian)"
     fi
 
     if [[ "$OSTYPE" == "darwin"* ]]; then
