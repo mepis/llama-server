@@ -1,6 +1,13 @@
 import { defineComponent, h } from 'vue'
 
 // SVG icon components
+const IconCheckDeps = defineComponent({
+  render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+    h('path', { d: 'M9 11l3 3L22 4', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }),
+    h('path', { d: 'M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }),
+  ])
+})
+
 const IconDetect = defineComponent({
   render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
     h('circle', { cx: '12', cy: '12', r: '3' }),
@@ -82,6 +89,32 @@ export const scripts = [
     usage: './scripts/detect-hardware.sh',
     examples: [
       { label: 'Run detection', code: './scripts/detect-hardware.sh' },
+    ],
+  },
+  {
+    id: 'check-deps',
+    name: 'Dependency Checker',
+    file: 'scripts/check-deps.sh',
+    description: 'Check for missing build dependencies and get platform-specific install commands.',
+    longDescription: 'Scans your system for all dependencies required to build Llama.cpp — core build tools, BLAS libraries, GPU toolkits (CUDA, ROCm, Vulkan, Metal), and SSL headers. Outputs ready-to-run install commands for your package manager.',
+    icon: IconCheckDeps,
+    iconBg: 'bg-emerald-50',
+    iconColor: 'text-emerald-500',
+    tags: ['Dependencies', 'Setup'],
+    requiresRoot: false,
+    features: [
+      'Core build tool checks (git, cmake, gcc, g++, make, wget, curl)',
+      'BLAS / OpenBLAS library detection',
+      'CUDA toolkit and Nvidia driver checks (when Nvidia GPU present)',
+      'ROCm and HIP checks (when AMD GPU present)',
+      'Vulkan development package checks',
+      'Metal / Xcode CLI tools checks (macOS)',
+      'OpenSSL development header checks',
+      'Platform-specific install commands (apt, dnf, pacman, apk, brew)',
+    ],
+    usage: './scripts/check-deps.sh',
+    examples: [
+      { label: 'Check dependencies', code: './scripts/check-deps.sh' },
     ],
   },
   {

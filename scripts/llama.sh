@@ -51,8 +51,9 @@ show_menu() {
     echo "  ${CYAN}5.${NC} Manage Llama.cpp Server"
     echo "  ${CYAN}6.${NC} Terminate and Cleanup"
     echo "  ${CYAN}7.${NC} Detect Hardware"
-    echo "  ${CYAN}8.${NC} Show System Info"
-    echo "  ${CYAN}9.${NC} View Documentation"
+    echo "  ${CYAN}8.${NC} Check Dependencies"
+    echo "  ${CYAN}9.${NC} Show System Info"
+    echo "  ${CYAN}10.${NC} View Documentation"
     echo "  ${CYAN}0.${NC} Exit"
     echo ""
     echo "=========================================="
@@ -73,6 +74,7 @@ show_help() {
     echo "  manage         Manage Llama.cpp server (start/stop/restart)"
     echo "  terminate      Terminate all Llama.cpp instances and cleanup"
     echo "  detect         Detect system hardware"
+    echo "  check-deps     Check for missing dependencies"
     echo "  info           Show system information"
     echo "  docs           View documentation"
     echo "  help           Show this help message"
@@ -246,6 +248,15 @@ execute_detect() {
     fi
 }
 
+execute_check_deps() {
+    log "Checking dependencies..."
+    if [ -f "$SCRIPTS_DIR/check-deps.sh" ]; then
+        bash "$SCRIPTS_DIR/check-deps.sh" "$@"
+    else
+        error "Dependency checker not found: $SCRIPTS_DIR/check-deps.sh"
+    fi
+}
+
 main() {
     # Check if command is provided
     if [ $# -gt 0 ]; then
@@ -274,6 +285,9 @@ main() {
             detect)
                 execute_detect "$@"
                 ;;
+            check-deps)
+                execute_check_deps "$@"
+                ;;
             info)
                 show_system_info
                 ;;
@@ -295,7 +309,7 @@ main() {
     # Interactive mode
     while true; do
         show_menu
-        read -p "Enter your choice [0-9]: " choice
+        read -p "Enter your choice [0-10]: " choice
 
         case $choice in
             1)
@@ -320,9 +334,12 @@ main() {
                 execute_detect
                 ;;
             8)
-                show_system_info
+                execute_check_deps
                 ;;
             9)
+                show_system_info
+                ;;
+            10)
                 show_documentation
                 ;;
             0)
@@ -330,7 +347,7 @@ main() {
                 exit 0
                 ;;
             *)
-                warning "Invalid choice. Please enter 0-9."
+                warning "Invalid choice. Please enter 0-10."
                 ;;
         esac
 
