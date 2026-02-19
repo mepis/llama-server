@@ -1,22 +1,10 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import ScriptCard from '../components/ScriptCard.vue'
 import ScriptModal from '../components/ScriptModal.vue'
 import { scripts } from '../data/scripts.js'
 
 const selectedScript = ref(null)
-const activeTag = ref('All')
-
-const allTags = computed(() => {
-  const tags = new Set(['All'])
-  scripts.forEach(s => s.tags.forEach(t => tags.add(t)))
-  return [...tags]
-})
-
-const filtered = computed(() => {
-  if (activeTag.value === 'All') return scripts
-  return scripts.filter(s => s.tags.includes(activeTag.value))
-})
 </script>
 
 <template>
@@ -33,25 +21,10 @@ const filtered = computed(() => {
       </p>
     </div>
 
-    <!-- Tag filter -->
-    <div class="flex flex-wrap gap-2 mb-10">
-      <button
-        v-for="tag in allTags"
-        :key="tag"
-        @click="activeTag = tag"
-        class="px-4 py-1.5 rounded-full text-sm font-medium border transition-all"
-        :class="activeTag === tag
-          ? 'bg-mint-500 text-white border-mint-500'
-          : 'bg-white text-gray-600 border-gray-200 hover:border-mint-300 hover:text-mint-600'"
-      >
-        {{ tag }}
-      </button>
-    </div>
-
     <!-- Grid -->
     <div class="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
       <ScriptCard
-        v-for="script in filtered"
+        v-for="script in scripts"
         :key="script.id"
         :script="script"
         @click="selectedScript = $event"
