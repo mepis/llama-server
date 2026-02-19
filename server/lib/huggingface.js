@@ -148,8 +148,19 @@ function downloadFile(modelId, filename, destDir, token) {
       const flags = resumeFrom > 0 ? 'a' : 'w'
       const fileStream = fs.createWriteStream(partPath, { flags })
 
+      // Inactivity timeout: cancel if no data received for 60s
+      let inactivityTimer = null
+      function resetInactivity() {
+        clearTimeout(inactivityTimer)
+        inactivityTimer = setTimeout(() => {
+          req.destroy(new Error('Download stalled — no data received for 60 seconds'))
+        }, 60000)
+      }
+      resetInactivity()
+
       res.on('data', (chunk) => {
         if (cancelled) return
+        resetInactivity()
         downloaded += chunk.length
         fileStream.write(chunk)
         const percent = total > 0 ? Math.min(100, Math.round((downloaded / total) * 100)) : null
@@ -157,6 +168,7 @@ function downloadFile(modelId, filename, destDir, token) {
       })
 
       res.on('end', () => {
+        clearTimeout(inactivityTimer)
         fileStream.end(() => {
           if (cancelled) return
           // Rename .part → final file
@@ -170,6 +182,7 @@ function downloadFile(modelId, filename, destDir, token) {
       })
 
       res.on('error', (err) => {
+        clearTimeout(inactivityTimer)
         fileStream.end()
         if (!cancelled) emitter.emit('error', { message: err.message })
       })
@@ -177,10 +190,6 @@ function downloadFile(modelId, filename, destDir, token) {
 
     req.on('error', (err) => {
       if (!cancelled) emitter.emit('error', { message: err.message })
-    })
-
-    req.setTimeout(30000, () => {
-      req.destroy(new Error('Request timed out'))
     })
 
     currentReq = req
