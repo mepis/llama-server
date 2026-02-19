@@ -72,7 +72,7 @@ async function searchModels(query, limit = 20, token) {
  * @returns {Promise<Array<{path, size, type}>>}
  */
 async function listModelFiles(modelId, token) {
-  const url = `${HF_API_BASE}/api/models/${encodeURIComponent(modelId)}`
+  const url = `${HF_API_BASE}/api/models/${modelId.split('/').map(encodeURIComponent).join('/')}`
   const headers = token ? { Authorization: `Bearer ${token}` } : {}
   const data = await fetchJSON(url, headers)
   const siblings = data.siblings || []
@@ -99,7 +99,7 @@ function downloadFile(modelId, filename, destDir, token) {
   const emitter = new EventEmitter()
 
   // Resolve URL — HF CDN redirect pattern
-  const fileUrl = `${HF_API_BASE}/${encodeURIComponent(modelId)}/resolve/main/${encodeURIComponent(filename)}`
+  const fileUrl = `${HF_API_BASE}/${modelId.split('/').map(encodeURIComponent).join('/')}/resolve/main/${encodeURIComponent(filename)}`
 
   const headers = { 'User-Agent': 'llama-server/1.0' }
   if (token) headers['Authorization'] = `Bearer ${token}`
