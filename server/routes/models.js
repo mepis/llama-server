@@ -7,6 +7,7 @@ const { createSSE } = require('../lib/sse')
 const {
   searchModels,
   listModelFiles,
+  groupGgufFiles,
   downloadFile,
   cancelDownload,
   listLocalModels,
@@ -62,74 +63,117 @@ router.get('/:owner/:repo/files', async (req, res) => {
   const token = req.headers['x-hf-token'] || process.env.HF_TOKEN || undefined
 
   try {
-    const files = await listModelFiles(modelId, token)
-    res.json({ modelId, files })
+    const files    = await listModelFiles(modelId, token)
+    const variants = groupGgufFiles(files)
+    res.json({ modelId, files, variants })
   } catch (err) {
     res.status(502).json({ error: `HuggingFace API error: ${err.message}` })
   }
 })
 
 // ---------------------------------------------------------------------------
-// GET /api/models/:owner/:repo/download/:filename
-// Download a model file with real-time SSE progress
+// GET /api/models/:owner/:repo/download
+// Download one or more files (variant) with real-time SSE progress.
+// Query params:
+//   file=<filename>  — repeat for each shard, or pass a single filename
+//   label=<string>   — human-readable variant label (for SSE start event)
 // ---------------------------------------------------------------------------
-router.get('/:owner/:repo/download/:filename', (req, res) => {
+router.get('/:owner/:repo/download', (req, res) => {
   const modelId = `${req.params.owner}/${req.params.repo}`
-  const filename = req.params.filename
-  const token = req.headers['x-hf-token'] || process.env.HF_TOKEN || undefined
-  const downloadKey = `${modelId}::${filename}`
+  const token   = req.headers['x-hf-token'] || process.env.HF_TOKEN || undefined
+
+  // Accept ?file=a.gguf&file=b.gguf  or  ?file=a.gguf
+  let files = req.query.file
+  if (!files) {
+    res.status(400).json({ error: 'At least one ?file= param is required' })
+    return
+  }
+  if (!Array.isArray(files)) files = [files]
+
+  const label = req.query.label || files[0]
+  const downloadKey = `${modelId}::${label}`
 
   if (activeDownloads.has(downloadKey)) {
-    // Already downloading — send an error so the client knows
     const sse = createSSE(res)
-    sse.send('error', { message: `Download already in progress for ${filename}` })
+    sse.send('error', { message: `Download already in progress for ${label}` })
     sse.close()
     return
   }
 
   const sse = createSSE(res)
-  sse.send('start', { modelId, filename, modelsDir: MODELS_DIR })
+  sse.send('start', { modelId, label, files, total: files.length, modelsDir: MODELS_DIR })
 
-  const { emitter, child } = downloadFile(modelId, filename, MODELS_DIR, token)
-  activeDownloads.set(downloadKey, child)
+  let cancelled = false
+  let currentChild = null
 
-  emitter.on('progress', (data) => {
-    sse.send('progress', data)
+  activeDownloads.set(downloadKey, {
+    kill: (sig) => { cancelled = true; if (currentChild) cancelDownload(currentChild) },
   })
 
-  emitter.on('done', (data) => {
-    activeDownloads.delete(downloadKey)
-    sse.send('done', data)
-    sse.close()
-  })
+  // Download files sequentially
+  let idx = 0
 
-  emitter.on('error', (data) => {
-    activeDownloads.delete(downloadKey)
-    sse.send('error', data)
-    sse.close()
-  })
+  function downloadNext() {
+    if (cancelled) return
+    if (idx >= files.length) {
+      activeDownloads.delete(downloadKey)
+      sse.send('done', { label, files, modelsDir: MODELS_DIR })
+      sse.close()
+      return
+    }
 
-  // If the client disconnects, kill the child process
+    const filename = files[idx]
+    sse.send('file-start', { filename, fileIndex: idx, total: files.length })
+
+    const { emitter, child } = downloadFile(modelId, filename, MODELS_DIR, token)
+    currentChild = child
+
+    emitter.on('progress', (data) => {
+      sse.send('progress', { ...data, filename, fileIndex: idx, total: files.length })
+    })
+
+    emitter.on('done', () => {
+      idx++
+      downloadNext()
+    })
+
+    emitter.on('error', (data) => {
+      activeDownloads.delete(downloadKey)
+      sse.send('error', { ...data, filename })
+      sse.close()
+    })
+  }
+
+  downloadNext()
+
+  // Client disconnect — cancel current child
   req.on('close', () => {
-    const c = activeDownloads.get(downloadKey)
+    cancelled = true
+    const entry = activeDownloads.get(downloadKey)
     activeDownloads.delete(downloadKey)
-    cancelDownload(c)
+    if (entry) entry.kill()
   })
 })
 
 // ---------------------------------------------------------------------------
-// DELETE /api/models/:owner/:repo/download/:filename
-// Cancel an in-progress download (removes the .part file)
+// DELETE /api/models/:owner/:repo/download?label=<label>
+// Cancel an in-progress variant download
 // ---------------------------------------------------------------------------
-router.delete('/:owner/:repo/download/:filename', (req, res) => {
+router.delete('/:owner/:repo/download', (req, res) => {
   const modelId = `${req.params.owner}/${req.params.repo}`
-  const filename = req.params.filename
-  const downloadKey = `${modelId}::${filename}`
+  const label   = req.query.label
+  if (!label) {
+    return res.status(400).json({ error: 'label query param required' })
+  }
+  const downloadKey = `${modelId}::${label}`
 
-  const child = activeDownloads.get(downloadKey)
+  const entry = activeDownloads.get(downloadKey)
   activeDownloads.delete(downloadKey)
-  const removed = cancelDownload(child)
-  res.json({ cancelled: removed, filename })
+  if (entry && typeof entry.kill === 'function') {
+    entry.kill()
+    return res.json({ cancelled: true, label })
+  }
+  res.json({ cancelled: false, label })
 })
 
 // ---------------------------------------------------------------------------

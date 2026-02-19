@@ -111,19 +111,26 @@ export function getHFModelFiles(modelId, hfToken) {
 }
 
 /**
- * Build the SSE URL for streaming a model download.
- * @param {string} modelId  e.g. "TheBloke/Mistral-7B-GGUF"
- * @param {string} filename e.g. "mistral-7b.Q4_K_M.gguf"
+ * Build the SSE URL for streaming a variant download.
+ * @param {string}   modelId  e.g. "TheBloke/Mistral-7B-GGUF"
+ * @param {string[]} files    one or more filenames in the variant
+ * @param {string}   label    human-readable variant label
  */
-export function modelDownloadUrl(modelId, filename) {
+export function modelDownloadUrl(modelId, files, label) {
   const [owner, repo] = modelId.split('/')
-  return `${BASE}/models/${owner}/${repo}/download/${encodeURIComponent(filename)}`
+  const params = new URLSearchParams()
+  files.forEach(f => params.append('file', f))
+  params.set('label', label)
+  return `${BASE}/models/${owner}/${repo}/download?${params}`
 }
 
 /**
- * Cancel an in-progress download.
+ * Cancel an in-progress variant download.
+ * @param {string} modelId
+ * @param {string} label  — the label used when starting the download
  */
-export function cancelModelDownload(modelId, filename) {
+export function cancelModelDownload(modelId, label) {
   const [owner, repo] = modelId.split('/')
-  return del(`/models/${owner}/${repo}/download/${encodeURIComponent(filename)}`)
+  const params = new URLSearchParams({ label })
+  return del(`/models/${owner}/${repo}/download?${params}`)
 }

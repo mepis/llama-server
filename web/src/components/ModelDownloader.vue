@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import {
   searchHFModels,
   getHFModelFiles,
@@ -14,28 +14,36 @@ const hfToken     = ref('')
 const query       = ref('')
 const searching   = ref(false)
 const searchError = ref('')
-const results     = ref([])       // HF search results
+const results     = ref([])
 
-const expandedModel  = ref(null)  // modelId whose files are shown
-const modelFiles     = ref([])
+const expandedModel  = ref(null)
+const variants       = ref([])   // grouped quant variants for expanded model
 const loadingFiles   = ref(false)
 const filesError     = ref('')
 
 const localModels    = ref([])
 const loadingLocal   = ref(false)
 
-// active downloads: Map<downloadKey, { progress, total, percent, done, error }>
+// active downloads: key = `modelId::label`
 const downloads      = ref({})
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function downloadKey(modelId, filename) { return `${modelId}::${filename}` }
+function dlKey(modelId, label) { return `${modelId}::${label}` }
 
 function fmtBytes(bytes) {
   if (!bytes) return '?'
   if (bytes < 1024 ** 2) return (bytes / 1024).toFixed(1) + ' KB'
   if (bytes < 1024 ** 3) return (bytes / 1024 ** 2).toFixed(1) + ' MB'
   return (bytes / 1024 ** 3).toFixed(2) + ' GB'
+}
+
+// Quant quality tiers for badge colour
+function quantTier(quant) {
+  const q = (quant || '').toUpperCase()
+  if (/^(Q8|Q6|F16|BF16|F32)/.test(q)) return 'high'
+  if (/^(Q5|Q4_K_M|Q4_K_L|IQ4)/.test(q)) return 'mid'
+  return 'low'
 }
 
 // ── Local models ───────────────────────────────────────────────────────────
@@ -60,7 +68,7 @@ async function doSearch() {
   searchError.value = ''
   results.value = []
   expandedModel.value = null
-  modelFiles.value = []
+  variants.value = []
   try {
     const data = await searchHFModels(q, 20, hfToken.value || undefined)
     results.value = data.results || []
@@ -70,21 +78,21 @@ async function doSearch() {
   searching.value = false
 }
 
-// ── File listing ───────────────────────────────────────────────────────────
+// ── File / variant listing ─────────────────────────────────────────────────
 
-async function toggleFiles(modelId) {
+async function toggleVariants(modelId) {
   if (expandedModel.value === modelId) {
     expandedModel.value = null
-    modelFiles.value = []
+    variants.value = []
     return
   }
   expandedModel.value = modelId
-  modelFiles.value = []
+  variants.value = []
   filesError.value = ''
   loadingFiles.value = true
   try {
     const data = await getHFModelFiles(modelId, hfToken.value || undefined)
-    modelFiles.value = (data.files || []).filter(f => f.type === 'gguf')
+    variants.value = data.variants || []
   } catch (e) {
     filesError.value = e.message
   }
@@ -93,23 +101,37 @@ async function toggleFiles(modelId) {
 
 // ── Download ───────────────────────────────────────────────────────────────
 
-function startDownload(modelId, filename) {
-  const key = downloadKey(modelId, filename)
+function startDownload(modelId, variant) {
+  const key = dlKey(modelId, variant.label)
   if (downloads.value[key]?.active) return
 
-  downloads.value[key] = { active: true, percent: 0, line: '', done: false, error: '' }
+  downloads.value[key] = {
+    active: true, percent: 0, line: '',
+    fileIndex: 0, total: variant.files.length,
+    done: false, error: '',
+  }
 
-  const url = modelDownloadUrl(modelId, filename)
-  const es = new EventSource(url)
+  const url = modelDownloadUrl(modelId, variant.files, variant.label)
+  const es  = new EventSource(url)
 
   es.addEventListener('progress', e => {
     const d = JSON.parse(e.data)
-    downloads.value[key] = { ...downloads.value[key], ...d, active: true }
+    downloads.value[key] = {
+      ...downloads.value[key],
+      percent:   d.percent ?? downloads.value[key].percent,
+      line:      d.line    ?? downloads.value[key].line,
+      fileIndex: d.fileIndex ?? downloads.value[key].fileIndex,
+      active: true,
+    }
   })
 
-  es.addEventListener('done', e => {
+  es.addEventListener('file-start', e => {
     const d = JSON.parse(e.data)
-    downloads.value[key] = { ...downloads.value[key], ...d, active: false, done: true, percent: 100 }
+    downloads.value[key] = { ...downloads.value[key], fileIndex: d.fileIndex, percent: 0, line: '' }
+  })
+
+  es.addEventListener('done', () => {
+    downloads.value[key] = { ...downloads.value[key], active: false, done: true, percent: 100 }
     es.close()
     refreshLocal()
   })
@@ -122,15 +144,11 @@ function startDownload(modelId, filename) {
   })
 }
 
-async function doCancel(modelId, filename) {
-  const key = downloadKey(modelId, filename)
-  try { await cancelModelDownload(modelId, filename) } catch {}
+async function doCancel(modelId, label) {
+  const key = dlKey(modelId, label)
+  try { await cancelModelDownload(modelId, label) } catch {}
   downloads.value[key] = { ...downloads.value[key], active: false, error: 'Cancelled' }
 }
-
-// ── Computed ───────────────────────────────────────────────────────────────
-
-const ggufFiles = computed(() => modelFiles.value.filter(f => f.type === 'gguf'))
 </script>
 
 <template>
@@ -151,7 +169,7 @@ const ggufFiles = computed(() => modelFiles.value.filter(f => f.type === 'gguf')
       </div>
     </div>
 
-    <!-- HF Token (optional) -->
+    <!-- HF Token -->
     <div>
       <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
         HuggingFace Token
@@ -203,9 +221,9 @@ const ggufFiles = computed(() => modelFiles.value.filter(f => f.type === 'gguf')
         :key="model.id"
         class="border border-gray-100 rounded-xl overflow-hidden"
       >
-        <!-- Model row -->
+        <!-- Model row header -->
         <button
-          @click="toggleFiles(model.id)"
+          @click="toggleVariants(model.id)"
           class="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
         >
           <div class="flex-1 min-w-0">
@@ -216,7 +234,6 @@ const ggufFiles = computed(() => modelFiles.value.filter(f => f.type === 'gguf')
               <span v-if="model.private" class="text-amber-500">private</span>
             </p>
           </div>
-          <!-- Chevron -->
           <svg
             class="w-4 h-4 text-gray-400 shrink-0 transition-transform"
             :class="expandedModel === model.id ? 'rotate-180' : ''"
@@ -226,76 +243,102 @@ const ggufFiles = computed(() => modelFiles.value.filter(f => f.type === 'gguf')
           </svg>
         </button>
 
-        <!-- File list (expanded) -->
-        <div v-if="expandedModel === model.id" class="border-t border-gray-100 bg-gray-50/50">
+        <!-- Variant list -->
+        <div v-if="expandedModel === model.id" class="border-t border-gray-100 bg-gray-50/40">
           <div v-if="loadingFiles" class="px-4 py-3 text-xs text-gray-400 flex items-center gap-2">
             <span class="w-3 h-3 border-2 border-gray-300 border-t-gray-500 rounded-full animate-spin inline-block"></span>
-            Loading files...
+            Loading variants...
           </div>
           <p v-else-if="filesError" class="px-4 py-3 text-xs text-red-500">{{ filesError }}</p>
-          <p v-else-if="!ggufFiles.length" class="px-4 py-3 text-xs text-gray-400">No GGUF files found in this repository.</p>
+          <p v-else-if="!variants.length" class="px-4 py-3 text-xs text-gray-400">No GGUF files found in this repository.</p>
 
           <div v-else class="divide-y divide-gray-100">
             <div
-              v-for="file in ggufFiles"
-              :key="file.path"
-              class="px-4 py-3"
+              v-for="variant in variants"
+              :key="variant.label"
+              class="px-4 py-3 flex items-center gap-3"
             >
-              <div class="flex items-center gap-3">
-                <div class="flex-1 min-w-0">
-                  <p class="text-sm font-mono text-gray-800 truncate">{{ file.path }}</p>
-                  <p class="text-xs text-gray-400 mt-0.5">{{ fmtBytes(file.size) }}</p>
-                </div>
+              <!-- Quant badge -->
+              <span
+                class="text-xs font-semibold px-2 py-0.5 rounded-md shrink-0 tabular-nums"
+                :class="{
+                  'bg-emerald-50 text-emerald-700': quantTier(variant.quant) === 'high',
+                  'bg-violet-50 text-violet-700':   quantTier(variant.quant) === 'mid',
+                  'bg-gray-100  text-gray-500':      quantTier(variant.quant) === 'low',
+                }"
+              >{{ variant.quant }}</span>
 
-                <!-- Per-file download state -->
-                <template v-if="downloads[`${model.id}::${file.path}`]">
-                  <template v-if="downloads[`${model.id}::${file.path}`].done">
-                    <span class="text-xs text-mint-600 font-medium flex items-center gap-1">
-                      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                        <polyline points="20 6 9 17 4 12" stroke-linecap="round" stroke-linejoin="round"/>
-                      </svg>
-                      Downloaded
-                    </span>
-                  </template>
-                  <template v-else-if="downloads[`${model.id}::${file.path}`].error">
-                    <span class="text-xs text-red-500">{{ downloads[`${model.id}::${file.path}`].error }}</span>
-                    <button @click="startDownload(model.id, file.path)" class="text-xs text-violet-600 hover:underline ml-2">Retry</button>
-                  </template>
-                  <template v-else-if="downloads[`${model.id}::${file.path}`].active">
-                    <div class="flex flex-col gap-1.5 min-w-0 flex-1">
-                      <!-- Progress bar -->
+              <!-- Label + meta -->
+              <div class="flex-1 min-w-0">
+                <p class="text-sm text-gray-800 truncate">{{ variant.label }}</p>
+                <p class="text-xs text-gray-400 mt-0.5 flex items-center gap-2">
+                  <span>{{ fmtBytes(variant.totalSize) }}</span>
+                  <span v-if="variant.sharded" class="text-gray-400">· {{ variant.files.length }} shards</span>
+                </p>
+              </div>
+
+              <!-- Download state -->
+              <template v-if="downloads[dlKey(model.id, variant.label)]">
+                <!-- Done -->
+                <template v-if="downloads[dlKey(model.id, variant.label)].done">
+                  <span class="text-xs text-emerald-600 font-medium flex items-center gap-1 shrink-0">
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                      <polyline points="20 6 9 17 4 12" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    Downloaded
+                  </span>
+                </template>
+                <!-- Error -->
+                <template v-else-if="downloads[dlKey(model.id, variant.label)].error">
+                  <div class="flex items-center gap-2 shrink-0">
+                    <span class="text-xs text-red-500 max-w-[12rem] truncate">{{ downloads[dlKey(model.id, variant.label)].error }}</span>
+                    <button @click="startDownload(model.id, variant)" class="text-xs text-violet-600 hover:underline">Retry</button>
+                  </div>
+                </template>
+                <!-- Active -->
+                <template v-else-if="downloads[dlKey(model.id, variant.label)].active">
+                  <div class="flex flex-col gap-1 min-w-0 w-48 shrink-0">
+                    <!-- Shard counter if multi-shard -->
+                    <div class="flex items-center justify-between text-xs text-gray-400">
+                      <span v-if="variant.sharded">
+                        Shard {{ downloads[dlKey(model.id, variant.label)].fileIndex + 1 }}
+                        / {{ variant.files.length }}
+                      </span>
+                      <span v-else>&nbsp;</span>
                       <div class="flex items-center gap-2">
-                        <div class="flex-1 h-1.5 rounded-full bg-gray-200 overflow-hidden">
-                          <div
-                            class="h-full bg-violet-500 transition-all duration-300"
-                            :style="{ width: (downloads[`${model.id}::${file.path}`].percent ?? 0) + '%' }"
-                          ></div>
-                        </div>
-                        <span class="text-xs text-gray-500 shrink-0 tabular-nums w-9 text-right">
-                          {{ downloads[`${model.id}::${file.path}`].percent != null
-                            ? downloads[`${model.id}::${file.path}`].percent + '%'
+                        <span class="tabular-nums">
+                          {{ downloads[dlKey(model.id, variant.label)].percent != null
+                            ? downloads[dlKey(model.id, variant.label)].percent + '%'
                             : '…' }}
                         </span>
                         <button
-                          @click="doCancel(model.id, file.path)"
-                          class="text-xs text-red-400 hover:text-red-600 transition-colors shrink-0"
+                          @click="doCancel(model.id, variant.label)"
+                          class="text-red-400 hover:text-red-600 transition-colors"
                         >Cancel</button>
                       </div>
-                      <!-- Latest log line -->
-                      <p
-                        v-if="downloads[`${model.id}::${file.path}`].line"
-                        class="text-xs text-gray-400 font-mono truncate"
-                      >{{ downloads[`${model.id}::${file.path}`].line }}</p>
                     </div>
-                  </template>
+                    <!-- Progress bar -->
+                    <div class="h-1.5 rounded-full bg-gray-200 overflow-hidden">
+                      <div
+                        class="h-full bg-violet-500 transition-all duration-300"
+                        :style="{ width: (downloads[dlKey(model.id, variant.label)].percent ?? 0) + '%' }"
+                      ></div>
+                    </div>
+                    <!-- Log line -->
+                    <p v-if="downloads[dlKey(model.id, variant.label)].line"
+                       class="text-xs text-gray-400 font-mono truncate">
+                      {{ downloads[dlKey(model.id, variant.label)].line }}
+                    </p>
+                  </div>
                 </template>
-                <template v-else>
-                  <button
-                    @click="startDownload(model.id, file.path)"
-                    class="px-3 py-1.5 rounded-lg bg-violet-500 hover:bg-violet-600 text-white text-xs font-medium transition-colors"
-                  >Download</button>
-                </template>
-              </div>
+              </template>
+              <!-- Not started -->
+              <template v-else>
+                <button
+                  @click="startDownload(model.id, variant)"
+                  class="px-3 py-1.5 rounded-lg bg-violet-500 hover:bg-violet-600 text-white text-xs font-medium transition-colors shrink-0"
+                >Download</button>
+              </template>
             </div>
           </div>
         </div>
@@ -327,7 +370,7 @@ const ggufFiles = computed(() => modelFiles.value.filter(f => f.type === 'gguf')
           :key="model.filename"
           class="flex items-center gap-3 px-4 py-3"
         >
-          <svg class="w-4 h-4 text-mint-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+          <svg class="w-4 h-4 text-emerald-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
             <path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z" stroke-linecap="round" stroke-linejoin="round"/>
             <polyline points="13 2 13 9 20 9" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>

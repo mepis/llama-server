@@ -229,9 +229,120 @@ function listLocalModels(modelsDir) {
     .sort((a, b) => b.mtimeMs - a.mtimeMs)
 }
 
+// Quant tags in rough quality order (used for sorting)
+const QUANT_ORDER = [
+  'Q8_0', 'Q6_K', 'Q5_K_M', 'Q5_K_S', 'Q5_0',
+  'Q4_K_M', 'Q4_K_S', 'Q4_0',
+  'Q3_K_L', 'Q3_K_M', 'Q3_K_S',
+  'Q2_K', 'Q2_K_S',
+  'IQ4_XS', 'IQ4_NL', 'IQ3_M', 'IQ3_S', 'IQ3_XS', 'IQ2_M', 'IQ2_S', 'IQ2_XS', 'IQ1_M', 'IQ1_S',
+  'F16', 'BF16', 'F32',
+]
+
+/**
+ * Group a flat list of GGUF file objects (from listModelFiles) into variants.
+ *
+ * Each variant represents one logical model file the user would want to
+ * download — either a single .gguf file or a sharded set (e.g. model-00001-of-00004.gguf).
+ *
+ * Returns an array of:
+ * {
+ *   label:    string   — human-readable name, e.g. "Q4_K_M" or "F16 (4 shards)"
+ *   quant:    string   — quantisation tag extracted from the filename, e.g. "Q4_K_M"
+ *   files:    string[] — one or more filenames that make up this variant
+ *   totalSize: number|null
+ *   sharded:  boolean
+ * }
+ */
+function groupGgufFiles(files) {
+  // Only work with gguf files
+  const gguf = files.filter(f => f.type === 'gguf')
+
+  // Shard pattern: anything ending in -NNNNN-of-NNNNN.gguf
+  const shardRe = /^(.+?)-(\d{5})-of-(\d{5})\.gguf$/i
+
+  const shardGroups = {}   // stem → [file, ...]
+  const singles     = []
+
+  for (const f of gguf) {
+    const name = f.path.split('/').pop()
+    const m    = name.match(shardRe)
+    if (m) {
+      const stem = m[1]  // everything before -00001-of-00004
+      if (!shardGroups[stem]) shardGroups[stem] = []
+      shardGroups[stem].push(f)
+    } else {
+      singles.push(f)
+    }
+  }
+
+  const variants = []
+
+  // Sharded sets
+  for (const [stem, shards] of Object.entries(shardGroups)) {
+    shards.sort((a, b) => a.path.localeCompare(b.path))
+    const quant = extractQuant(stem)
+    const totalSize = shards.every(s => s.size != null)
+      ? shards.reduce((s, f) => s + f.size, 0)
+      : null
+    variants.push({
+      label:     quant ? `${quant} (${shards.length} shards)` : `${stem} (${shards.length} shards)`,
+      quant:     quant || 'Unknown',
+      files:     shards.map(s => s.path),
+      totalSize,
+      sharded:   true,
+    })
+  }
+
+  // Single files
+  for (const f of singles) {
+    const name  = f.path.split('/').pop()
+    const quant = extractQuant(name)
+    variants.push({
+      label:     quant || name.replace(/\.gguf$/i, ''),
+      quant:     quant || 'Other',
+      files:     [f.path],
+      totalSize: f.size,
+      sharded:   false,
+    })
+  }
+
+  // Sort by quant quality order; unknowns go last
+  variants.sort((a, b) => {
+    const ai = QUANT_ORDER.indexOf(a.quant.toUpperCase())
+    const bi = QUANT_ORDER.indexOf(b.quant.toUpperCase())
+    const ar = ai === -1 ? 999 : ai
+    const br = bi === -1 ? 999 : bi
+    return ar - br
+  })
+
+  return variants
+}
+
+/**
+ * Extract a quantisation tag from a filename or stem.
+ * Returns e.g. "Q4_K_M", "IQ3_M", "F16", or null.
+ */
+function extractQuant(name) {
+  // Order matters: try longer/more-specific patterns first
+  const patterns = [
+    /\b(IQ[1-4]_(?:XS|NL|[MSX]+))\b/i,
+    /\b(Q[2-8]_K_[LMSX])\b/i,
+    /\b(Q[2-8]_K)\b/i,
+    /\b(Q[2-8]_[01])\b/i,
+    /\b(BF16|F16|F32)\b/i,
+  ]
+  for (const re of patterns) {
+    const m = name.match(re)
+    if (m) return m[1].toUpperCase()
+  }
+  return null
+}
+
 module.exports = {
   searchModels,
   listModelFiles,
+  groupGgufFiles,
   downloadFile,
   cancelDownload,
   listLocalModels,
