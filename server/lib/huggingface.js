@@ -2,8 +2,8 @@
 
 const https = require('https')
 const http = require('http')
+const fs = require('fs')
 const path = require('path')
-const { spawn } = require('child_process')
 const { EventEmitter } = require('events')
 
 const HF_API_BASE = 'https://huggingface.co'
@@ -86,29 +86,10 @@ async function listModelFiles(modelId, token) {
 }
 
 /**
- * Locate the llama-cli binary.
- * Checks common install paths in priority order.
- */
-function findLlamaCli() {
-  const candidates = [
-    path.join(process.env.HOME || '', '.local', 'llama-cpp', 'bin', 'llama-cli'),
-    '/usr/local/bin/llama-cli',
-    'llama-cli', // rely on PATH
-  ]
-  // Return the first absolute path that could plausibly exist; PATH fallback is always last
-  for (const c of candidates) {
-    if (!c.includes('/')) return c          // PATH lookup — always valid to try
-    try {
-      require('fs').accessSync(c)
-      return c
-    } catch { /* not found */ }
-  }
-  return 'llama-cli'
-}
-
-/**
- * Download a single GGUF file from HuggingFace using llama-cli --download-only.
- * Emits: 'progress' { downloaded, total, percent, line }
+ * Download a single GGUF file from HuggingFace using Node.js HTTP streaming.
+ * Supports resume via Range header if a partial file already exists.
+ *
+ * Emits: 'progress' { downloaded, total, percent }
  *         'done'     { filename, destPath }
  *         'error'    { message }
  *
@@ -116,112 +97,119 @@ function findLlamaCli() {
  * @param {string} filename  - e.g. "mistral-7b.Q4_K_M.gguf"
  * @param {string} destDir   - local directory to save the file
  * @param {string} [token]   - optional HF access token
- * @returns {{ emitter: EventEmitter, child: ChildProcess }}
+ * @returns {{ emitter: EventEmitter, cancel: Function }}
  */
 function downloadFile(modelId, filename, destDir, token) {
   const emitter = new EventEmitter()
-  const llamaCli = findLlamaCli()
-  const fs = require('fs')
-
-  // llama-cli --download-only downloads to its HF cache directory.
-  // We set LLAMA_CACHE to destDir so the file lands where we want it.
-  // --model is not used here because it controls the load path, not the
-  // download destination, and is invalid without a model to run.
-  const args = [
-    '--hf-repo',       modelId,
-    '--hf-file',       filename,
-    '--download-only',
-  ]
-
-  const env = { ...process.env, LLAMA_CACHE: destDir }
-  if (token) env.HF_TOKEN = token
 
   fs.mkdirSync(destDir, { recursive: true })
 
   const destPath = path.join(destDir, filename)
+  const partPath = destPath + '.part'
 
-  const child = spawn(llamaCli, args, {
-    env,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
+  let cancelled = false
+  let currentReq = null
 
-  // Capture all output lines. llama-cli writes download progress to stderr,
-  // typically as:  llama_load_model_from_url: downloading ...  X.XX MiB / Y.YY MiB (ZZ%)
-  const progressRe = /(\d+(?:\.\d+)?)\s*%/
-
-  // Collect stderr for error reporting
-  const stderrLines = []
-
-  function parseLine(line) {
-    const m = line.match(progressRe)
-    const percent = m ? Math.min(100, Math.round(parseFloat(m[1]))) : null
-    emitter.emit('progress', { line, percent })
+  function cancel() {
+    cancelled = true
+    if (currentReq) {
+      currentReq.destroy()
+      currentReq = null
+    }
   }
 
-  let stdoutBuf = ''
-  child.stdout.on('data', (chunk) => {
-    stdoutBuf += chunk.toString()
-    const lines = stdoutBuf.split('\n')
-    stdoutBuf = lines.pop()
-    for (const l of lines) if (l.trim()) parseLine(l)
-  })
+  function doRequest(url, resumeFrom) {
+    if (cancelled) return
 
-  let stderrBuf = ''
-  child.stderr.on('data', (chunk) => {
-    stderrBuf += chunk.toString()
-    const lines = stderrBuf.split('\n')
-    stderrBuf = lines.pop()
-    for (const l of lines) {
-      if (l.trim()) {
-        stderrLines.push(l.trim())
-        parseLine(l)
+    const isHttps = url.startsWith('https')
+    const protocol = isHttps ? https : http
+    const headers = {}
+    if (token) headers['Authorization'] = `Bearer ${token}`
+    if (resumeFrom > 0) headers['Range'] = `bytes=${resumeFrom}-`
+
+    const req = protocol.get(url, { headers }, (res) => {
+      // Follow redirects
+      if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307 || res.statusCode === 308) {
+        currentReq = null
+        doRequest(res.headers.location, resumeFrom)
+        return
       }
-    }
-  })
 
-  child.on('close', (code) => {
-    // Flush any remaining buffered output
-    if (stdoutBuf.trim()) parseLine(stdoutBuf)
-    if (stderrBuf.trim()) {
-      stderrLines.push(stderrBuf.trim())
-      parseLine(stderrBuf)
-    }
+      if (res.statusCode !== 200 && res.statusCode !== 206) {
+        emitter.emit('error', { message: `HTTP ${res.statusCode} downloading ${filename}` })
+        return
+      }
 
-    if (code === 0) {
-      emitter.emit('done', { filename, destPath })
-    } else if (code !== null) {
-      // Include the last few stderr lines in the error message for diagnostics
-      const detail = stderrLines.slice(-3).join(' | ')
-      emitter.emit('error', {
-        message: `llama-cli exited with code ${code}${detail ? ': ' + detail : ''}`,
+      // Total size: Content-Length for fresh download, or resumeFrom + Content-Length for resume
+      const contentLength = parseInt(res.headers['content-length'] || '0', 10)
+      const total = resumeFrom + contentLength
+
+      let downloaded = resumeFrom
+      const flags = resumeFrom > 0 ? 'a' : 'w'
+      const fileStream = fs.createWriteStream(partPath, { flags })
+
+      res.on('data', (chunk) => {
+        if (cancelled) return
+        downloaded += chunk.length
+        fileStream.write(chunk)
+        const percent = total > 0 ? Math.min(100, Math.round((downloaded / total) * 100)) : null
+        emitter.emit('progress', { downloaded, total, percent })
       })
-    }
-    // code === null means SIGTERM (cancelled) — emit nothing
-  })
 
-  child.on('error', (err) => {
-    emitter.emit('error', {
-      message: err.code === 'ENOENT'
-        ? `llama-cli not found. Install llama.cpp first (run the Install script).`
-        : err.message,
+      res.on('end', () => {
+        fileStream.end(() => {
+          if (cancelled) return
+          // Rename .part → final file
+          try {
+            fs.renameSync(partPath, destPath)
+            emitter.emit('done', { filename, destPath })
+          } catch (err) {
+            emitter.emit('error', { message: `Failed to finalise file: ${err.message}` })
+          }
+        })
+      })
+
+      res.on('error', (err) => {
+        fileStream.end()
+        if (!cancelled) emitter.emit('error', { message: err.message })
+      })
     })
-  })
 
-  return { emitter, child }
+    req.on('error', (err) => {
+      if (!cancelled) emitter.emit('error', { message: err.message })
+    })
+
+    req.setTimeout(30000, () => {
+      req.destroy(new Error('Request timed out'))
+    })
+
+    currentReq = req
+  }
+
+  // Build the HuggingFace CDN URL
+  const encodedId = modelId.split('/').map(encodeURIComponent).join('/')
+  const encodedFile = filename.split('/').map(encodeURIComponent).join('/')
+  const url = `${HF_API_BASE}/${encodedId}/resolve/main/${encodedFile}`
+
+  // Resume if a .part file exists
+  let resumeFrom = 0
+  try {
+    resumeFrom = fs.statSync(partPath).size
+  } catch { /* no partial file */ }
+
+  doRequest(url, resumeFrom)
+
+  return { emitter, cancel }
 }
 
 /**
- * Cancel an in-progress download by killing the llama-cli child process.
- * @param {ChildProcess} child - the process returned by downloadFile
+ * Cancel an in-progress download.
+ * @param {{ cancel: Function }} handle - the object returned by downloadFile
  */
-function cancelDownload(child) {
-  if (!child) return false
-  try {
-    child.kill('SIGTERM')
-    return true
-  } catch {
-    return false
-  }
+function cancelDownload(handle) {
+  if (!handle || typeof handle.cancel !== 'function') return false
+  handle.cancel()
+  return true
 }
 
 /**

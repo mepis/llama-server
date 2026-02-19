@@ -106,8 +106,8 @@ function startDownload(modelId, variant) {
   if (downloads.value[key]?.active) return
 
   downloads.value[key] = {
-    active: true, percent: 0, line: '',
-    fileIndex: 0, total: variant.files.length,
+    active: true, percent: 0, downloaded: 0, total: 0,
+    fileIndex: 0, fileTotal: variant.files.length,
     done: false, error: '',
   }
 
@@ -118,16 +118,17 @@ function startDownload(modelId, variant) {
     const d = JSON.parse(e.data)
     downloads.value[key] = {
       ...downloads.value[key],
-      percent:   d.percent ?? downloads.value[key].percent,
-      line:      d.line    ?? downloads.value[key].line,
-      fileIndex: d.fileIndex ?? downloads.value[key].fileIndex,
+      percent:    d.percent    ?? downloads.value[key].percent,
+      downloaded: d.downloaded ?? downloads.value[key].downloaded,
+      total:      d.total      ?? downloads.value[key].total,
+      fileIndex:  d.fileIndex  ?? downloads.value[key].fileIndex,
       active: true,
     }
   })
 
   es.addEventListener('file-start', e => {
     const d = JSON.parse(e.data)
-    downloads.value[key] = { ...downloads.value[key], fileIndex: d.fileIndex, percent: 0, line: '' }
+    downloads.value[key] = { ...downloads.value[key], fileIndex: d.fileIndex, percent: 0, downloaded: 0, total: 0 }
   })
 
   es.addEventListener('done', () => {
@@ -300,11 +301,18 @@ async function doCancel(modelId, label) {
                   <div class="flex flex-col gap-1 min-w-0 w-48 shrink-0">
                     <!-- Shard counter if multi-shard -->
                     <div class="flex items-center justify-between text-xs text-gray-400">
-                      <span v-if="variant.sharded">
-                        Shard {{ downloads[dlKey(model.id, variant.label)].fileIndex + 1 }}
-                        / {{ variant.files.length }}
+                      <span>
+                        <span v-if="variant.sharded">
+                          Shard {{ downloads[dlKey(model.id, variant.label)].fileIndex + 1 }}
+                          / {{ variant.files.length }} ·
+                        </span>
+                        <span class="tabular-nums">
+                          {{ fmtBytes(downloads[dlKey(model.id, variant.label)].downloaded) }}
+                          <span v-if="downloads[dlKey(model.id, variant.label)].total">
+                            / {{ fmtBytes(downloads[dlKey(model.id, variant.label)].total) }}
+                          </span>
+                        </span>
                       </span>
-                      <span v-else>&nbsp;</span>
                       <div class="flex items-center gap-2">
                         <span class="tabular-nums">
                           {{ downloads[dlKey(model.id, variant.label)].percent != null
@@ -324,11 +332,6 @@ async function doCancel(modelId, label) {
                         :style="{ width: (downloads[dlKey(model.id, variant.label)].percent ?? 0) + '%' }"
                       ></div>
                     </div>
-                    <!-- Log line -->
-                    <p v-if="downloads[dlKey(model.id, variant.label)].line"
-                       class="text-xs text-gray-400 font-mono truncate">
-                      {{ downloads[dlKey(model.id, variant.label)].line }}
-                    </p>
                   </div>
                 </template>
               </template>

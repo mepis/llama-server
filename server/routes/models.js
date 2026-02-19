@@ -107,7 +107,7 @@ router.get('/:owner/:repo/download', (req, res) => {
   let currentChild = null
 
   activeDownloads.set(downloadKey, {
-    kill: (sig) => { cancelled = true; if (currentChild) cancelDownload(currentChild) },
+    kill: () => { cancelled = true; if (currentChild) cancelDownload(currentChild) },
   })
 
   // Download files sequentially
@@ -125,8 +125,8 @@ router.get('/:owner/:repo/download', (req, res) => {
     const filename = files[idx]
     sse.send('file-start', { filename, fileIndex: idx, total: files.length })
 
-    const { emitter, child } = downloadFile(modelId, filename, MODELS_DIR, token)
-    currentChild = child
+    const { emitter, cancel } = downloadFile(modelId, filename, MODELS_DIR, token)
+    currentChild = { cancel }
 
     emitter.on('progress', (data) => {
       sse.send('progress', { ...data, filename, fileIndex: idx, total: files.length })
