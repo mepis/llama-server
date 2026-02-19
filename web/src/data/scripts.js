@@ -87,6 +87,7 @@ export const scripts = [
       'Results saved to /tmp/hardware_detection_*.txt',
     ],
     usage: './scripts/detect-hardware.sh',
+    params: [],
     examples: [
       { label: 'Run detection', code: './scripts/detect-hardware.sh' },
     ],
@@ -113,6 +114,7 @@ export const scripts = [
       'Platform-specific install commands (apt, dnf, pacman, apk, brew)',
     ],
     usage: './scripts/check-deps.sh',
+    params: [],
     examples: [
       { label: 'Check dependencies', code: './scripts/check-deps.sh' },
     ],
@@ -137,6 +139,12 @@ export const scripts = [
       'Comprehensive error handling and logging',
     ],
     usage: './scripts/install/install-lamacpp.sh',
+    params: [
+      { id: 'INSTALL_DIR', label: 'Install directory', type: 'text', placeholder: '~/.local/llama-cpp', envVar: true, desc: 'Where binaries and config are installed' },
+      { id: 'CLONE_DIR',   label: 'Clone directory',   type: 'text', placeholder: '~/.local/llama-cpp/src', envVar: true, desc: 'Where the source repo is cloned' },
+      { id: 'BUILD_DIR',   label: 'Build directory',   type: 'text', placeholder: '~/.local/llama-cpp/build', envVar: true, desc: 'CMake build output directory' },
+      { id: 'LOG_FILE',    label: 'Log file path',     type: 'text', placeholder: '~/.local/llama-cpp/logs/install.log', envVar: true, desc: 'Installation log file location' },
+    ],
     env: [
       { name: 'INSTALL_DIR', default: '~/.local/llama-cpp', desc: 'Installation directory' },
       { name: 'CLONE_DIR', default: '~/.local/llama-cpp/src', desc: 'Source code clone directory' },
@@ -169,6 +177,12 @@ export const scripts = [
       'Parallel compilation using all CPU cores',
     ],
     usage: './scripts/compile/compile-lamacpp.sh',
+    params: [
+      { id: 'SOURCE_DIR',  label: 'Source directory',  type: 'text', placeholder: '~/.local/llama-cpp/src',   envVar: true, desc: 'Cloned Llama.cpp source directory' },
+      { id: 'BUILD_DIR',   label: 'Build directory',   type: 'text', placeholder: '~/.local/llama-cpp/build', envVar: true, desc: 'CMake build output directory' },
+      { id: 'INSTALL_DIR', label: 'Install directory', type: 'text', placeholder: '~/.local/llama-cpp',       envVar: true, desc: 'Final installation directory' },
+      { id: 'LOG_FILE',    label: 'Log file path',     type: 'text', placeholder: '~/.local/llama-cpp/logs/compile.log', envVar: true, desc: 'Compilation log file' },
+    ],
     env: [
       { name: 'SOURCE_DIR', default: '~/.local/llama-cpp/src', desc: 'Cloned source directory' },
       { name: 'BUILD_DIR', default: '~/.local/llama-cpp/build', desc: 'CMake build output directory' },
@@ -199,6 +213,13 @@ export const scripts = [
       'Verification of new installation before committing',
     ],
     usage: './scripts/upgrade/upgrade-lamacpp.sh',
+    params: [
+      { id: 'CURRENT_INSTALL_DIR', label: 'Install directory', type: 'text', placeholder: '~/.local/llama-cpp',         envVar: true, desc: 'Existing Llama.cpp installation' },
+      { id: 'BACKUP_DIR',          label: 'Backup directory',  type: 'text', placeholder: '~/.local/llama-cpp-backup',  envVar: true, desc: 'Where to store the backup archive' },
+      { id: 'SOURCE_DIR',          label: 'Source directory',  type: 'text', placeholder: '~/.local/llama-cpp/src',     envVar: true, desc: 'Source repo directory to pull into' },
+      { id: 'BUILD_DIR',           label: 'Build directory',   type: 'text', placeholder: '~/.local/llama-cpp/upgrade-build', envVar: true, desc: 'Temporary build directory' },
+      { id: 'LOG_FILE',            label: 'Log file path',     type: 'text', placeholder: '~/.local/llama-cpp/logs/upgrade.log', envVar: true, desc: 'Upgrade log file' },
+    ],
     examples: [
       { label: 'Standard upgrade', code: './scripts/upgrade/upgrade-lamacpp.sh' },
     ],
@@ -224,6 +245,21 @@ export const scripts = [
       'Log file management with timestamped filenames',
     ],
     usage: './scripts/launch/launch-lamacpp.sh [OPTIONS]',
+    params: [
+      { id: '--model',          label: 'Model path',       type: 'text',     placeholder: '/path/to/model.gguf', desc: 'Path to local GGUF model file' },
+      { id: '--hf',             label: 'HuggingFace repo', type: 'text',     placeholder: 'bartowski/Llama-3.2-3B-Instruct-GGUF', desc: 'Download and use a model from HuggingFace' },
+      { id: '--port',           label: 'Port',             type: 'number',   placeholder: '8080', desc: 'Server listen port' },
+      { id: '--host',           label: 'Host',             type: 'text',     placeholder: '0.0.0.0', desc: 'Bind address' },
+      { id: '--ngl',            label: 'GPU layers',       type: 'number',   placeholder: '99', desc: 'Number of GPU layers to offload (99 = all)' },
+      { id: '--threads',        label: 'Threads',          type: 'number',   placeholder: '$(nproc)', desc: 'Number of CPU threads' },
+      { id: '--context',        label: 'Context size',     type: 'number',   placeholder: '2048', desc: 'Context window size in tokens' },
+      { id: '--batch-size',     label: 'Batch size',       type: 'number',   placeholder: '512', desc: 'Prompt processing batch size' },
+      { id: '--log-level',      label: 'Log level',        type: 'select',   options: ['info', 'warning', 'error', 'debug'], desc: 'Logging verbosity' },
+      { id: '--unified-memory', label: 'Unified Memory',   type: 'flag',     desc: 'Enable CUDA Unified Memory (allows models larger than VRAM)' },
+      { id: '--daemon',         label: 'Daemon mode',      type: 'flag',     desc: 'Run as a background daemon (nohup)' },
+      { id: '--no-gpu',         label: 'No GPU',           type: 'flag',     desc: 'Disable GPU acceleration entirely' },
+      { id: '--download-only',  label: 'Download only',    type: 'flag',     desc: 'Download model via --hf without starting server' },
+    ],
     options: [
       { flag: '--model, -m PATH', desc: 'Path to local GGUF model file' },
       { flag: '--hf REPO', desc: 'Download model from HuggingFace (e.g. bartowski/Llama-3.2-3B-Instruct-GGUF)' },
@@ -270,6 +306,11 @@ export const scripts = [
       'Log file browsing with filtering',
     ],
     usage: './scripts/manage/manage-lamacpp.sh COMMAND',
+    params: [
+      { id: 'command', label: 'Command', type: 'select', options: ['start', 'stop', 'restart', 'status', 'logs', 'monitor', 'list'], desc: 'Management action to perform', positional: true },
+      { id: 'LOG_DIR',   label: 'Log directory', type: 'text', placeholder: '~/.local/llama-cpp/logs', envVar: true, desc: 'Directory containing server log files' },
+      { id: 'PID_FILE',  label: 'PID file path', type: 'text', placeholder: '/tmp/llama-server.pid',   envVar: true, desc: 'PID file used to track the server process' },
+    ],
     options: [
       { flag: 'start', desc: 'Start the server' },
       { flag: 'stop', desc: 'Stop the server gracefully' },
@@ -308,6 +349,11 @@ export const scripts = [
       'Memory status display after cleanup',
     ],
     usage: 'sudo ./scripts/terminate/terminate-lamacpp.sh',
+    params: [
+      { id: 'INSTALL_DIR', label: 'Install directory', type: 'text', placeholder: '~/.local/llama-cpp',      envVar: true, desc: 'Llama.cpp installation directory (for log cleanup)' },
+      { id: 'LOG_DIR',     label: 'Log directory',     type: 'text', placeholder: '~/.local/llama-cpp/logs', envVar: true, desc: 'Directory where server logs are stored' },
+      { id: 'PID_FILE',    label: 'PID file path',     type: 'text', placeholder: '/tmp/llama-server.pid',   envVar: true, desc: 'PID file to identify the running server' },
+    ],
     examples: [
       { label: 'Full cleanup', code: 'sudo ./scripts/terminate/terminate-lamacpp.sh' },
     ],
@@ -331,6 +377,10 @@ export const scripts = [
       'Documentation URL viewer',
     ],
     usage: './scripts/llama.sh [COMMAND]',
+    params: [
+      { id: 'command', label: 'Command', type: 'select', options: ['install', 'compile', 'upgrade', 'launch', 'manage', 'terminate', 'detect', 'info', 'docs', 'help'], desc: 'Sub-command to run (leave blank for interactive menu)', positional: true },
+      { id: 'extra',   label: 'Extra arguments', type: 'text', placeholder: '--model /path/to/model.gguf --ngl 99', desc: 'Additional arguments forwarded to the sub-command' },
+    ],
     options: [
       { flag: 'install', desc: 'Run installation script' },
       { flag: 'compile', desc: 'Run compilation script' },

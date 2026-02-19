@@ -1,7 +1,8 @@
 <script setup>
-import { ref, watch, onBeforeUnmount } from 'vue'
+import { ref, onBeforeUnmount } from 'vue'
 import CodeBlock from './CodeBlock.vue'
 import TerminalOutput from './TerminalOutput.vue'
+import ScriptParamForm from './ScriptParamForm.vue'
 import { scripts } from '../data/scripts.js'
 
 const selected = ref(scripts[0])
@@ -9,23 +10,32 @@ const activeTab = ref('docs')
 
 // Run state
 const sseUrl = ref(null)
-const customArgs = ref('')
 const isRunning = ref(false)
+
+// Holds the latest { args, env } emitted by ScriptParamForm
+const paramArgs = ref({ args: '', env: '' })
+
+function onParamUpdate(val) {
+  paramArgs.value = val
+}
 
 function select(script) {
   selected.value = script
   activeTab.value = 'docs'
   sseUrl.value = null
   isRunning.value = false
-  customArgs.value = ''
+  paramArgs.value = { args: '', env: '' }
 }
 
 function buildSseUrl() {
-  const args = customArgs.value.trim().split(/\s+/).filter(Boolean)
-  const params = new URLSearchParams()
-  args.forEach(a => params.append('arg', a))
-  const qs = params.toString()
-  return `/api/scripts/${selected.value.id}/run${qs ? '?' + qs : ''}`
+  // Combine env vars and CLI args into a single args string for the SSE endpoint.
+  // The server passes them verbatim as shell arguments, so we prepend env assignments.
+  const combined = [paramArgs.value.env, paramArgs.value.args].filter(Boolean).join(' ').trim()
+  const parts = combined.split(/\s+/).filter(Boolean)
+  const qs = new URLSearchParams()
+  parts.forEach(a => qs.append('arg', a))
+  const qStr = qs.toString()
+  return `/api/scripts/${selected.value.id}/run${qStr ? '?' + qStr : ''}`
 }
 
 function runScript() {
@@ -238,19 +248,13 @@ onBeforeUnmount(() => {
             <span>This script requires root privileges. The server process must have sudo access for it to run successfully.</span>
           </div>
 
-          <!-- Args input -->
+          <!-- Parameter form -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              Arguments
-              <span class="text-gray-400 font-normal ml-1">(optional, space-separated)</span>
-            </label>
-            <input
-              v-model="customArgs"
-              type="text"
-              :placeholder="selected.usage ? selected.usage.split(' ').slice(1).join(' ') : '--help'"
-              class="w-full px-4 py-2.5 rounded-xl border border-gray-200 font-mono text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:border-mint-400 focus:ring-2 focus:ring-mint-100 transition-all"
+            <p class="text-sm font-semibold text-gray-700 mb-3">Parameters</p>
+            <ScriptParamForm
+              :params="selected.params || []"
               :disabled="isRunning"
-              @keydown.enter="runScript"
+              @update:args="onParamUpdate"
             />
           </div>
 
