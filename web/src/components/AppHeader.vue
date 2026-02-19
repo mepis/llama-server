@@ -7,8 +7,7 @@ const scrolled = ref(false)
 const mobileOpen = ref(false)
 
 const navLinks = [
-  { to: '/', label: 'Home' },
-  { to: '/scripts', label: 'Scripts' },
+  { to: '/', label: 'Scripts' },
   { to: '/hardware', label: 'Hardware' },
   { to: '/docs', label: 'Docs' },
 ]
