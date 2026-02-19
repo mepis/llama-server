@@ -121,35 +121,36 @@ function findLlamaCli() {
 function downloadFile(modelId, filename, destDir, token) {
   const emitter = new EventEmitter()
   const llamaCli = findLlamaCli()
+  const fs = require('fs')
 
-  // llama-cli uses --hf-repo and --hf-file for model selection,
-  // and --model to specify the output path.
-  const destPath = path.join(destDir, filename)
-
+  // llama-cli --download-only downloads to its HF cache directory.
+  // We set LLAMA_CACHE to destDir so the file lands where we want it.
+  // --model is not used here because it controls the load path, not the
+  // download destination, and is invalid without a model to run.
   const args = [
-    '--hf-repo', modelId,
-    '--hf-file', filename,
-    '--model',   destPath,
+    '--hf-repo',       modelId,
+    '--hf-file',       filename,
     '--download-only',
-    '--no-display-prompt',
   ]
 
-  const env = { ...process.env }
+  const env = { ...process.env, LLAMA_CACHE: destDir }
   if (token) env.HF_TOKEN = token
 
-  require('fs').mkdirSync(destDir, { recursive: true })
+  fs.mkdirSync(destDir, { recursive: true })
+
+  const destPath = path.join(destDir, filename)
 
   const child = spawn(llamaCli, args, {
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
   })
 
-  // llama-cli writes download progress to stderr in the form:
-  //   llama_model_loader: - type  f16:  ...
-  //   or curl-style:  % Total   % Received ...
-  // We forward every stderr line as a progress event and also try to
-  // parse percentage numbers so the frontend progress bar stays live.
+  // Capture all output lines. llama-cli writes download progress to stderr,
+  // typically as:  llama_load_model_from_url: downloading ...  X.XX MiB / Y.YY MiB (ZZ%)
   const progressRe = /(\d+(?:\.\d+)?)\s*%/
+
+  // Collect stderr for error reporting
+  const stderrLines = []
 
   function parseLine(line) {
     const m = line.match(progressRe)
@@ -161,7 +162,7 @@ function downloadFile(modelId, filename, destDir, token) {
   child.stdout.on('data', (chunk) => {
     stdoutBuf += chunk.toString()
     const lines = stdoutBuf.split('\n')
-    stdoutBuf = lines.pop()            // keep incomplete last line
+    stdoutBuf = lines.pop()
     for (const l of lines) if (l.trim()) parseLine(l)
   })
 
@@ -170,20 +171,32 @@ function downloadFile(modelId, filename, destDir, token) {
     stderrBuf += chunk.toString()
     const lines = stderrBuf.split('\n')
     stderrBuf = lines.pop()
-    for (const l of lines) if (l.trim()) parseLine(l)
+    for (const l of lines) {
+      if (l.trim()) {
+        stderrLines.push(l.trim())
+        parseLine(l)
+      }
+    }
   })
 
   child.on('close', (code) => {
     // Flush any remaining buffered output
     if (stdoutBuf.trim()) parseLine(stdoutBuf)
-    if (stderrBuf.trim()) parseLine(stderrBuf)
+    if (stderrBuf.trim()) {
+      stderrLines.push(stderrBuf.trim())
+      parseLine(stderrBuf)
+    }
 
     if (code === 0) {
       emitter.emit('done', { filename, destPath })
     } else if (code !== null) {
-      // code === null means we killed it (cancel)
-      emitter.emit('error', { message: `llama-cli exited with code ${code}` })
+      // Include the last few stderr lines in the error message for diagnostics
+      const detail = stderrLines.slice(-3).join(' | ')
+      emitter.emit('error', {
+        message: `llama-cli exited with code ${code}${detail ? ': ' + detail : ''}`,
+      })
     }
+    // code === null means SIGTERM (cancelled) — emit nothing
   })
 
   child.on('error', (err) => {
