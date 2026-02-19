@@ -63,8 +63,7 @@
 
 <script setup>
 const nav = [
-  { to: '/', label: 'Home' },
-  { to: '/scripts', label: 'Scripts' },
+  { to: '/', label: 'Scripts' },
   { to: '/hardware', label: 'Hardware' },
   { to: '/docs', label: 'Documentation' },
 ]
