@@ -97,7 +97,7 @@ function startDownload(modelId, filename) {
   const key = downloadKey(modelId, filename)
   if (downloads.value[key]?.active) return
 
-  downloads.value[key] = { active: true, percent: 0, downloaded: 0, total: 0, done: false, error: '' }
+  downloads.value[key] = { active: true, percent: 0, line: '', done: false, error: '' }
 
   const url = modelDownloadUrl(modelId, filename)
   const es = new EventSource(url)
@@ -262,23 +262,30 @@ const ggufFiles = computed(() => modelFiles.value.filter(f => f.type === 'gguf')
                     <button @click="startDownload(model.id, file.path)" class="text-xs text-violet-600 hover:underline ml-2">Retry</button>
                   </template>
                   <template v-else-if="downloads[`${model.id}::${file.path}`].active">
-                    <div class="flex items-center gap-3">
-                      <div class="w-32">
-                        <div class="h-1.5 rounded-full bg-gray-200 overflow-hidden">
+                    <div class="flex flex-col gap-1.5 min-w-0 flex-1">
+                      <!-- Progress bar -->
+                      <div class="flex items-center gap-2">
+                        <div class="flex-1 h-1.5 rounded-full bg-gray-200 overflow-hidden">
                           <div
                             class="h-full bg-violet-500 transition-all duration-300"
-                            :style="{ width: downloads[`${model.id}::${file.path}`].percent + '%' }"
+                            :style="{ width: (downloads[`${model.id}::${file.path}`].percent ?? 0) + '%' }"
                           ></div>
                         </div>
-                        <p class="text-xs text-gray-400 mt-0.5 text-right">
-                          {{ fmtBytes(downloads[`${model.id}::${file.path}`].downloaded) }}
-                          / {{ fmtBytes(downloads[`${model.id}::${file.path}`].total) }}
-                        </p>
+                        <span class="text-xs text-gray-500 shrink-0 tabular-nums w-9 text-right">
+                          {{ downloads[`${model.id}::${file.path}`].percent != null
+                            ? downloads[`${model.id}::${file.path}`].percent + '%'
+                            : '…' }}
+                        </span>
+                        <button
+                          @click="doCancel(model.id, file.path)"
+                          class="text-xs text-red-400 hover:text-red-600 transition-colors shrink-0"
+                        >Cancel</button>
                       </div>
-                      <button
-                        @click="doCancel(model.id, file.path)"
-                        class="text-xs text-red-400 hover:text-red-600 transition-colors"
-                      >Cancel</button>
+                      <!-- Latest log line -->
+                      <p
+                        v-if="downloads[`${model.id}::${file.path}`].line"
+                        class="text-xs text-gray-400 font-mono truncate"
+                      >{{ downloads[`${model.id}::${file.path}`].line }}</p>
                     </div>
                   </template>
                 </template>

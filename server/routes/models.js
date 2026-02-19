@@ -16,7 +16,7 @@ const { ROOT } = require('../lib/scriptRunner')
 // Default directory where downloaded models are stored
 const MODELS_DIR = process.env.MODELS_DIR || path.join(ROOT, 'models')
 
-// Track active downloads: key = `modelId::filename`, value = EventEmitter
+// Track active downloads: key = `modelId::filename`, value = ChildProcess
 const activeDownloads = new Map()
 
 // ---------------------------------------------------------------------------
@@ -90,8 +90,8 @@ router.get('/:owner/:repo/download/:filename', (req, res) => {
   const sse = createSSE(res)
   sse.send('start', { modelId, filename, modelsDir: MODELS_DIR })
 
-  const emitter = downloadFile(modelId, filename, MODELS_DIR, token)
-  activeDownloads.set(downloadKey, emitter)
+  const { emitter, child } = downloadFile(modelId, filename, MODELS_DIR, token)
+  activeDownloads.set(downloadKey, child)
 
   emitter.on('progress', (data) => {
     sse.send('progress', data)
@@ -109,10 +109,11 @@ router.get('/:owner/:repo/download/:filename', (req, res) => {
     sse.close()
   })
 
-  // If the client disconnects, cancel the download
+  // If the client disconnects, kill the child process
   req.on('close', () => {
+    const c = activeDownloads.get(downloadKey)
     activeDownloads.delete(downloadKey)
-    cancelDownload(MODELS_DIR, filename)
+    cancelDownload(c)
   })
 })
 
@@ -125,8 +126,9 @@ router.delete('/:owner/:repo/download/:filename', (req, res) => {
   const filename = req.params.filename
   const downloadKey = `${modelId}::${filename}`
 
+  const child = activeDownloads.get(downloadKey)
   activeDownloads.delete(downloadKey)
-  const removed = cancelDownload(MODELS_DIR, filename)
+  const removed = cancelDownload(child)
   res.json({ cancelled: removed, filename })
 })
 
