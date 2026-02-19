@@ -20,6 +20,7 @@ const SCRIPT_MAP = {
   'check-deps': path.join(ROOT, 'scripts', 'check-deps.sh'),
   'detect': path.join(ROOT, 'scripts', 'detect-hardware.sh'),
   'llama': path.join(ROOT, 'scripts', 'llama.sh'),
+  'download-model': path.join(ROOT, 'scripts', 'download', 'download-model.sh'),
 }
 
 /**

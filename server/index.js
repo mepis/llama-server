@@ -9,6 +9,7 @@ const statusRouter = require('./routes/status')
 const logsRouter = require('./routes/logs')
 const processesRouter = require('./routes/processes')
 const hardwareRouter = require('./routes/hardware')
+const modelsRouter = require('./routes/models')
 const { shutdown: shutdownScripts } = require('./lib/scriptRunner')
 
 const app = express()
@@ -32,6 +33,7 @@ app.use('/api/status', statusRouter)
 app.use('/api/logs', logsRouter)
 app.use('/api/processes', processesRouter)
 app.use('/api/hardware', hardwareRouter)
+app.use('/api/models', modelsRouter)
 
 // API 404 handler — prevents SPA fallback from catching bad API routes
 app.all('/api/{*path}', (req, res) => {
@@ -59,6 +61,12 @@ if (fs.existsSync(distPath)) {
         'GET  /api/processes',
         'DELETE /api/processes/:pid',
         'GET  /api/hardware',
+        'GET  /api/models',
+        'GET  /api/models/search?q=<query>',
+        'GET  /api/models/downloads',
+        'GET  /api/models/:owner/:repo/files',
+        'GET  /api/models/:owner/:repo/download/:filename',
+        'DELETE /api/models/:owner/:repo/download/:filename',
       ],
     })
   })
