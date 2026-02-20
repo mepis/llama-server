@@ -357,19 +357,19 @@ build_command() {
     fi
 
     if [ -n "$NGL" ]; then
-        cmd="$cmd --ngl $NGL"
+        cmd="$cmd -ngl $NGL"
     fi
 
     if [ -n "$THREADS" ]; then
-        cmd="$cmd --threads $THREADS"
+        cmd="$cmd -t $THREADS"
     fi
 
     if [ -n "$CONTEXT_SIZE" ]; then
-        cmd="$cmd --ctx-size $CONTEXT_SIZE"
+        cmd="$cmd -c $CONTEXT_SIZE"
     fi
 
     if [ -n "$BATCH_SIZE" ]; then
-        cmd="$cmd --batch-size $BATCH_SIZE"
+        cmd="$cmd -b $BATCH_SIZE"
     fi
 
     if [ -n "$LOG_LEVEL" ]; then
@@ -382,7 +382,7 @@ build_command() {
     fi
 
     if [ "$NO_GPU" = "1" ]; then
-        cmd="$cmd --ngl 0"
+        cmd="$cmd -ngl 0"
     fi
 
     # Set environment variables
