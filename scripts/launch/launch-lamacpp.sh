@@ -388,8 +388,8 @@ build_command() {
     # Set environment variables
     export GGML_LOG_LEVEL="${LOG_LEVEL:-info}"
 
-    log "Command to execute: $cmd"
-    echo ""
+    log "Command to execute: $cmd" >&2
+    echo "" >&2
 
     echo "$cmd"
 }
