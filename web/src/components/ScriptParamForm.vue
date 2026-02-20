@@ -1,5 +1,6 @@
 <script setup>
-import { reactive, computed, watch } from 'vue'
+import { reactive, computed, watch, ref, onMounted } from 'vue'
+import { getLocalModels } from '../api.js'
 
 const props = defineProps({
   params: { type: Array, default: () => [] },
@@ -7,6 +8,29 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:args'])
+
+// Local models for model-select dropdown
+const localModels = ref([])
+const loadingModels = ref(false)
+
+async function fetchLocalModels() {
+  loadingModels.value = true
+  try {
+    const data = await getLocalModels()
+    localModels.value = data.models || []
+  } catch (err) {
+    console.error('Failed to fetch local models:', err)
+    localModels.value = []
+  }
+  loadingModels.value = false
+}
+
+onMounted(() => {
+  // Only fetch if we have a model-select param
+  if (props.params.some(p => p.type === 'model-select')) {
+    fetchLocalModels()
+  }
+})
 
 // Reactive map of param id → current value
 const values = reactive({})
@@ -113,6 +137,32 @@ watch([builtArgs, builtEnv], () => {
             <option value="">— none —</option>
             <option v-for="opt in param.options" :key="opt" :value="opt">{{ opt }}</option>
           </select>
+        </template>
+
+        <!-- Model Select (dropdown of downloaded models) -->
+        <template v-else-if="param.type === 'model-select'">
+          <div class="space-y-2">
+            <select
+              v-model="values[param.id]"
+              :disabled="disabled || loadingModels"
+              class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-800 bg-white focus:outline-none focus:border-mint-400 focus:ring-2 focus:ring-mint-100 transition-all disabled:opacity-50"
+            >
+              <option value="">— select a model —</option>
+              <option v-for="model in localModels" :key="model.filename" :value="model.path">
+                {{ model.filename }}
+              </option>
+            </select>
+            <div v-if="localModels.length === 0 && !loadingModels" class="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-100">
+              <svg class="w-4 h-4 text-amber-500 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke-linecap="round" stroke-linejoin="round"/>
+                <line x1="12" y1="9" x2="12" y2="13" stroke-linecap="round"/>
+                <circle cx="12" cy="17" r="0.5" fill="currentColor"/>
+              </svg>
+              <p class="text-xs text-amber-700 leading-relaxed">
+                No models found. Download models using the "Download Models" section in the sidebar.
+              </p>
+            </div>
+          </div>
         </template>
 
         <!-- Number -->

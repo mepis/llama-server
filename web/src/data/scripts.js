@@ -246,7 +246,7 @@ export const scripts = [
     ],
     usage: './scripts/launch/launch-lamacpp.sh [OPTIONS]',
     params: [
-      { id: '--model',          label: 'Model path',       type: 'text',     placeholder: '/path/to/model.gguf', desc: 'Path to local GGUF model file' },
+      { id: '--model',          label: 'Model path',       type: 'model-select', desc: 'Path to local GGUF model file' },
       { id: '--hf',             label: 'HuggingFace repo', type: 'text',     placeholder: 'bartowski/Llama-3.2-3B-Instruct-GGUF', desc: 'Download and use a model from HuggingFace' },
       { id: '--port',           label: 'Port',             type: 'number',   placeholder: '8080', desc: 'Server listen port' },
       { id: '--host',           label: 'Host',             type: 'text',     placeholder: '0.0.0.0', desc: 'Bind address' },
