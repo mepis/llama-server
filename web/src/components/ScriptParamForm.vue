@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, computed, watch, ref, onMounted } from 'vue'
+import { reactive, computed, watch, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useModelsStore } from '../stores/models.js'
 
@@ -16,9 +16,15 @@ const emit = defineEmits(['update:args'])
 const modelsStore = useModelsStore()
 const { localModels, loadingLocal: loadingModels } = storeToRefs(modelsStore)
 
-onMounted(() => {
-  if (props.params.some(p => p.type === 'model-select')) modelsStore.refreshLocal()
-})
+// Watch params so refreshLocal fires immediately on mount AND whenever the
+// selected script changes (e.g. switching to Launch Server after initial load).
+watch(
+  () => props.params,
+  (params) => {
+    if (params.some(p => p.type === 'model-select')) modelsStore.refreshLocal()
+  },
+  { immediate: true },
+)
 
 // ── Persistence ─────────────────────────────────────────────────────────────
 
