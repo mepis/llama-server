@@ -24,7 +24,6 @@ function onParamUpdate(val) {
 
 function select(script) {
   selected.value = script
-  activeTab.value = 'docs'
   sseUrl.value = null
   isRunning.value = false
   paramArgs.value = { args: '', env: '' }
@@ -44,7 +43,6 @@ function buildSseUrl() {
 function runScript() {
   if (isRunning.value) return
   isRunning.value = true
-  activeTab.value = 'run'
   sseUrl.value = buildSseUrl()
 }
 
@@ -76,7 +74,7 @@ onBeforeUnmount(() => {
         <button
           v-for="script in scripts"
           :key="script.id"
-          @click="selectScript(script)"
+          @click="select(script)"
           class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all group"
           :class="selected?.id === script.id
             ? 'bg-mint-50 text-mint-700'
