@@ -254,7 +254,6 @@ export const scripts = [
       { id: '--threads',        label: 'Threads',          type: 'number',   placeholder: '$(nproc)', desc: 'Number of CPU threads' },
       { id: '--context',        label: 'Context size',     type: 'number',   placeholder: '2048', desc: 'Context window size in tokens' },
       { id: '--batch-size',     label: 'Batch size',       type: 'number',   placeholder: '512', desc: 'Prompt processing batch size' },
-      { id: '--log-level',      label: 'Log level',        type: 'select',   options: ['info', 'warning', 'error', 'debug'], desc: 'Logging verbosity' },
       { id: '--unified-memory', label: 'Unified Memory',   type: 'flag',     desc: 'Enable CUDA Unified Memory (allows models larger than VRAM)' },
       { id: '--daemon',         label: 'Daemon mode',      type: 'flag',     desc: 'Run as a background daemon (nohup)' },
       { id: '--no-gpu',         label: 'No GPU',           type: 'flag',     desc: 'Disable GPU acceleration entirely' },

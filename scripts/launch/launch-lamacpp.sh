@@ -376,10 +376,6 @@ build_command() {
         cmd="$cmd -b $BATCH_SIZE"
     fi
 
-    if [ -n "$LOG_LEVEL" ]; then
-        cmd="$cmd --log-level $LOG_LEVEL"
-    fi
-
     # Unified Memory is controlled via environment variable (not a server flag)
     if [ -n "$UNIFIED_MEMORY" ]; then
         export GGML_CUDA_ENABLE_UNIFIED_MEMORY=1
