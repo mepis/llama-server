@@ -32,6 +32,9 @@ const isRunning = ref(false)
 // Holds the latest { args, env } emitted by ScriptParamForm
 const paramArgs = ref({ args: '', env: '' })
 
+// Ref to the ScriptParamForm component for calling reset()
+const paramFormRef = ref(null)
+
 function onParamUpdate(val) {
   paramArgs.value = val
 }
@@ -302,9 +305,25 @@ onBeforeUnmount(() => {
 
           <!-- Parameter form -->
           <div>
-            <p class="text-sm font-semibold text-gray-700 mb-3">Parameters</p>
+            <div class="flex items-center justify-between mb-3">
+              <p class="text-sm font-semibold text-gray-700">Parameters</p>
+              <button
+                v-if="!isRunning"
+                @click="paramFormRef?.reset()"
+                class="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                title="Reset parameters to defaults"
+              >
+                <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="1 4 1 10 7 10" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M3.51 15a9 9 0 102.13-9.36L1 10" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Reset
+              </button>
+            </div>
             <ScriptParamForm
+              ref="paramFormRef"
               :params="selected.params || []"
+              :scriptId="selected.id"
               :disabled="isRunning"
               @update:args="onParamUpdate"
             />

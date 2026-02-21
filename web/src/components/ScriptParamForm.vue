@@ -3,14 +3,16 @@ import { reactive, computed, watch, ref, onMounted } from 'vue'
 import { getLocalModels } from '../api.js'
 
 const props = defineProps({
-  params: { type: Array, default: () => [] },
+  params:   { type: Array,  default: () => [] },
   disabled: { type: Boolean, default: false },
+  scriptId: { type: String,  default: '' },
 })
 
 const emit = defineEmits(['update:args'])
 
-// Local models for model-select dropdown
-const localModels = ref([])
+// ── Local models ────────────────────────────────────────────────────────────
+
+const localModels  = ref([])
 const loadingModels = ref(false)
 
 async function fetchLocalModels() {
@@ -26,68 +28,95 @@ async function fetchLocalModels() {
 }
 
 onMounted(() => {
-  // Only fetch if we have a model-select param
-  if (props.params.some(p => p.type === 'model-select')) {
-    fetchLocalModels()
-  }
+  if (props.params.some(p => p.type === 'model-select')) fetchLocalModels()
 })
 
-// Reactive map of param id → current value
-const values = reactive({})
+// ── Persistence ─────────────────────────────────────────────────────────────
 
-// Initialise / reset when params list changes (new script selected)
+function storageKey(id) { return `llama-config:${id}` }
+
+function loadSaved(id) {
+  if (!id) return {}
+  try { return JSON.parse(localStorage.getItem(storageKey(id)) || '{}') } catch { return {} }
+}
+
+function saveValues(id, vals) {
+  if (!id) return
+  localStorage.setItem(storageKey(id), JSON.stringify({ ...vals }))
+}
+
+// ── Reactive values ──────────────────────────────────────────────────────────
+
+const values = reactive({})
+const hasSaved = ref(false)
+
+function initValues(params, id) {
+  for (const key of Object.keys(values)) delete values[key]
+  // Seed defaults
+  for (const p of params) {
+    if (p.type === 'flag') values[p.id] = false
+    else values[p.id] = ''
+  }
+  // Overlay saved values
+  const saved = loadSaved(id)
+  hasSaved.value = Object.keys(saved).length > 0
+  for (const p of params) {
+    if (p.id in saved) values[p.id] = saved[p.id]
+  }
+}
+
 watch(
-  () => props.params,
-  (params) => {
-    // Clear old keys
-    for (const key of Object.keys(values)) delete values[key]
-    // Seed defaults
-    for (const p of params) {
-      if (p.type === 'flag') values[p.id] = false
-      else if (p.type === 'select') values[p.id] = ''
-      else values[p.id] = ''
-    }
-  },
+  () => [props.params, props.scriptId],
+  ([params, id]) => initValues(params, id),
   { immediate: true },
 )
 
-// Build the argv string that gets passed to the script
+// Auto-save whenever values change (deep watch)
+watch(
+  () => ({ ...values }),
+  (vals) => {
+    saveValues(props.scriptId, vals)
+    hasSaved.value = true
+  },
+  { deep: true },
+)
+
+function reset() {
+  if (props.scriptId) localStorage.removeItem(storageKey(props.scriptId))
+  initValues(props.params, '')   // reinit with no saved data
+  hasSaved.value = false
+}
+
+defineExpose({ reset })
+
+// ── Args builder ─────────────────────────────────────────────────────────────
+
 const builtArgs = computed(() => {
   const parts = []
-
   for (const p of props.params) {
+    if (p.envVar) continue
     const val = values[p.id]
-
-    if (p.envVar) continue // env vars are handled separately
-
     if (p.type === 'flag') {
       if (val) parts.push(p.id)
     } else if (p.positional) {
       if (val) parts.push(val)
     } else {
-      if (val !== '' && val !== null && val !== undefined) {
-        parts.push(p.id, val)
-      }
+      if (val !== '' && val !== null && val !== undefined) parts.push(p.id, val)
     }
   }
-
   return parts.join(' ')
 })
 
-// Build env var prefix  (e.g. "INSTALL_DIR=/foo BUILD_DIR=/bar")
 const builtEnv = computed(() => {
   const pairs = []
   for (const p of props.params) {
     if (!p.envVar) continue
     const val = values[p.id]
-    if (val !== '' && val !== null && val !== undefined) {
-      pairs.push(`${p.id}=${val}`)
-    }
+    if (val !== '' && val !== null && val !== undefined) pairs.push(`${p.id}=${val}`)
   }
   return pairs.join(' ')
 })
 
-// Combined string exposed to parent: "ENV=val script args"
 watch([builtArgs, builtEnv], () => {
   emit('update:args', { args: builtArgs.value, env: builtEnv.value })
 }, { immediate: true })
