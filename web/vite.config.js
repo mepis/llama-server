@@ -12,7 +12,7 @@ export default defineConfig({
     proxy: {
       // During development, proxy /api requests to the Express server
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'http://localhost:8080',
         changeOrigin: true,
       },
     },
