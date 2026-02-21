@@ -18,6 +18,15 @@ BUILD_DIR="${BUILD_DIR:-$HOME/.local/llama-cpp/build}"
 LOG_DIR="${INSTALL_DIR}/logs"
 LOG_FILE="${LOG_FILE:-${LOG_DIR}/install.log}"
 
+# Compile-time options (override auto-detection)
+# GPU_BACKEND: auto | cuda | rocm | vulkan | sycl | opencl | cpu
+GPU_BACKEND="${GPU_BACKEND:-auto}"
+# CUDA_ARCHITECTURES: e.g. "86;89;90" — leave empty for auto-detect
+CUDA_ARCHITECTURES="${CUDA_ARCHITECTURES:-}"
+BUILD_TYPE="${BUILD_TYPE:-Release}"
+BLAS_VENDOR="${BLAS_VENDOR:-OpenBLAS}"
+GGML_NATIVE="${GGML_NATIVE:-ON}"
+
 # Functions
 log() {
     mkdir -p "$(dirname "$LOG_FILE")"
@@ -170,80 +179,88 @@ build_lamacpp() {
     log "Configuring build with hardware detection..."
 
     # Use -S (source) and -B (build) to avoid cd
-    local cmake_args="-S $CLONE_DIR -B $BUILD_DIR -DCMAKE_BUILD_TYPE=Release"
+    local cmake_args="-S $CLONE_DIR -B $BUILD_DIR -DCMAKE_BUILD_TYPE=${BUILD_TYPE}"
 
-    # Add GPU support based on detection
-    if command -v nvidia-smi &> /dev/null; then
+    log "GPU backend: ${GPU_BACKEND}"
+
+    # ── GPU backend selection ──────────────────────────────────────────────
+    if [ "$GPU_BACKEND" = "cpu" ]; then
+        log "CPU-only build — skipping all GPU backends"
+    elif [ "$GPU_BACKEND" = "cuda" ] || { [ "$GPU_BACKEND" = "auto" ] && command -v nvidia-smi &> /dev/null; }; then
         log "Adding CUDA support..."
         cmake_args="$cmake_args -DGGML_CUDA=ON"
 
-        # Detect CUDA toolkit version and set compatible architectures
-        # to avoid targeting GPU archs newer than what nvcc supports
-        if command -v nvcc &> /dev/null; then
+        # CUDA architectures: use override or auto-detect from nvcc version
+        local cuda_archs="${CUDA_ARCHITECTURES}"
+        if [ -z "$cuda_archs" ] && command -v nvcc &> /dev/null; then
             local cuda_ver
             cuda_ver=$(nvcc --version | grep -oP 'release \K[0-9]+\.[0-9]+')
             local cuda_major=${cuda_ver%%.*}
             local cuda_minor=${cuda_ver#*.}
             log "Detected CUDA toolkit version: $cuda_ver"
 
-            # Map CUDA version to max supported architecture
-            local cuda_archs=""
             if [ "$cuda_major" -ge 13 ] || { [ "$cuda_major" -eq 12 ] && [ "$cuda_minor" -ge 8 ]; }; then
-                # CUDA 12.8+ supports compute_120a (Blackwell)
                 cuda_archs="60;70;75;80;86;89;90;100;120"
             elif [ "$cuda_major" -eq 12 ] && [ "$cuda_minor" -ge 6 ]; then
-                # CUDA 12.6-12.7 supports up to compute_100a (Thorpe)
                 cuda_archs="60;70;75;80;86;89;90;100"
-            elif [ "$cuda_major" -eq 12 ] && [ "$cuda_minor" -ge 4 ]; then
-                # CUDA 12.4-12.5 supports up to compute_90a (Hopper)
-                cuda_archs="60;70;75;80;86;89;90"
             elif [ "$cuda_major" -eq 12 ]; then
-                # CUDA 12.0-12.3
                 cuda_archs="60;70;75;80;86;89;90"
             elif [ "$cuda_major" -eq 11 ]; then
-                # CUDA 11.x supports up to compute_86
                 cuda_archs="60;70;75;80;86"
             else
                 cuda_archs="60;70;75"
             fi
-
-            cmake_args="$cmake_args -DCMAKE_CUDA_ARCHITECTURES='$cuda_archs'"
-            log "Setting CUDA architectures: $cuda_archs"
         fi
-    fi
 
-    if command -v rocm-smi &> /dev/null && command -v hipconfig &> /dev/null; then
+        if [ -n "$cuda_archs" ]; then
+            cmake_args="$cmake_args -DCMAKE_CUDA_ARCHITECTURES='$cuda_archs'"
+            log "CUDA architectures: $cuda_archs"
+        fi
+
+    elif [ "$GPU_BACKEND" = "rocm" ] || { [ "$GPU_BACKEND" = "auto" ] && command -v rocm-smi &> /dev/null && command -v hipconfig &> /dev/null; }; then
         log "Adding ROCm/HIP support..."
         cmake_args="$cmake_args -DGGML_HIP=ON"
+
+    elif [ "$GPU_BACKEND" = "vulkan" ] || [ "$GPU_BACKEND" = "auto" ]; then
+        # Vulkan: check dev headers + glslc shader compiler
+        local vulkan_dev=false
+        if command -v pkg-config &> /dev/null && pkg-config --exists vulkan 2>/dev/null; then
+            vulkan_dev=true
+        elif [ -f /usr/include/vulkan/vulkan.h ] || [ -f /usr/local/include/vulkan/vulkan.h ]; then
+            vulkan_dev=true
+        elif ldconfig -p 2>/dev/null | grep -q libvulkan; then
+            vulkan_dev=true
+        fi
+
+        if [ "$GPU_BACKEND" = "vulkan" ] || { [ "$vulkan_dev" = true ] && command -v glslc &> /dev/null; }; then
+            log "Adding Vulkan support..."
+            cmake_args="$cmake_args -DGGML_VULKAN=ON"
+        elif [ "$vulkan_dev" = true ]; then
+            warning "Vulkan dev headers found but glslc missing. Skipping Vulkan. Install: sudo apt-get install glslc"
+        fi
+
+    elif [ "$GPU_BACKEND" = "sycl" ]; then
+        log "Adding SYCL support (Intel GPU)..."
+        cmake_args="$cmake_args -DGGML_SYCL=ON"
+
+    elif [ "$GPU_BACKEND" = "opencl" ]; then
+        log "Adding OpenCL support..."
+        cmake_args="$cmake_args -DGGML_OPENCL=ON"
     fi
 
-    # Vulkan requires dev headers AND the glslc shader compiler (from shaderc)
-    # Note: glslangValidator (from glslang-tools) is NOT sufficient — CMake requires glslc
-    local vulkan_dev=false
-
-    if command -v pkg-config &> /dev/null && pkg-config --exists vulkan 2>/dev/null; then
-        vulkan_dev=true
-    elif [ -f /usr/include/vulkan/vulkan.h ] || [ -f /usr/local/include/vulkan/vulkan.h ]; then
-        vulkan_dev=true
-    elif ldconfig -p 2>/dev/null | grep -q libvulkan; then
-        vulkan_dev=true
-    fi
-
-    if [ "$vulkan_dev" = true ] && command -v glslc &> /dev/null; then
-        log "Adding Vulkan support..."
-        cmake_args="$cmake_args -DGGML_VULKAN=ON"
-    elif [ "$vulkan_dev" = true ]; then
-        warning "Vulkan dev headers found but glslc shader compiler missing. Skipping Vulkan."
-        warning "Install with: sudo apt-get install glslc (Ubuntu/Debian)"
-    fi
-
-    if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS Metal (always enabled on macOS unless CPU-only)
+    if [[ "$OSTYPE" == "darwin"* ]] && [ "$GPU_BACKEND" != "cpu" ]; then
         log "Adding Metal support..."
         cmake_args="$cmake_args -DGGML_METAL=ON"
     fi
 
-    # Add BLAS support for CPU
-    cmake_args="$cmake_args -DGGML_BLAS=ON -DGGML_NATIVE=ON"
+    # ── CPU / BLAS options ─────────────────────────────────────────────────
+    cmake_args="$cmake_args -DGGML_NATIVE=${GGML_NATIVE}"
+
+    if [ "${BLAS_VENDOR}" != "None" ]; then
+        cmake_args="$cmake_args -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=${BLAS_VENDOR}"
+        log "BLAS vendor: ${BLAS_VENDOR}"
+    fi
 
     # Build
     log "Running cmake configuration..."
