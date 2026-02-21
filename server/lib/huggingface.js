@@ -272,8 +272,6 @@ function listLocalModels(modelsDir) {
     })
     .sort((a, b) => b.mtimeMs - a.mtimeMs);
 
-  console.log("models.lostLocalModels: ", models);
-
   return models;
 }
 

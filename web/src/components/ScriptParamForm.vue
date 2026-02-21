@@ -1,6 +1,7 @@
 <script setup>
 import { reactive, computed, watch, ref, onMounted } from 'vue'
-import { getLocalModels } from '../api.js'
+import { storeToRefs } from 'pinia'
+import { useModelsStore } from '../stores/models.js'
 
 const props = defineProps({
   params:   { type: Array,  default: () => [] },
@@ -10,25 +11,13 @@ const props = defineProps({
 
 const emit = defineEmits(['update:args'])
 
-// ── Local models ────────────────────────────────────────────────────────────
+// ── Local models (shared via store) ─────────────────────────────────────────
 
-const localModels  = ref([])
-const loadingModels = ref(false)
-
-async function fetchLocalModels() {
-  loadingModels.value = true
-  try {
-    const data = await getLocalModels()
-    localModels.value = data.models || []
-  } catch (err) {
-    console.error('Failed to fetch local models:', err)
-    localModels.value = []
-  }
-  loadingModels.value = false
-}
+const modelsStore = useModelsStore()
+const { localModels, loadingLocal: loadingModels } = storeToRefs(modelsStore)
 
 onMounted(() => {
-  if (props.params.some(p => p.type === 'model-select')) fetchLocalModels()
+  if (props.params.some(p => p.type === 'model-select')) modelsStore.refreshLocal()
 })
 
 // ── Persistence ─────────────────────────────────────────────────────────────

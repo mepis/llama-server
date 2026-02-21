@@ -30,10 +30,6 @@ const activeDownloads = new Map();
 router.get("/", (req, res) => {
   try {
     const models = listLocalModels(MODELS_DIR);
-
-    console.log("models.get: ", models);
-    console.log("MODELS_DIR: ", MODELS_DIR);
-
     res.json({ models, modelsDir: MODELS_DIR });
   } catch (err) {
     res.status(500).json({ error: err.message });

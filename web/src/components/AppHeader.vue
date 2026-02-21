@@ -8,6 +8,8 @@ const mobileOpen = ref(false)
 
 const navLinks = [
   { to: '/', label: 'Scripts' },
+  { to: '/models', label: 'Models' },
+  { to: '/docs', label: 'Docs' },
 ]
 
 function handleScroll() {

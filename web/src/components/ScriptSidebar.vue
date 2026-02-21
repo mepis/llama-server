@@ -1,64 +1,17 @@
 <script setup>
-import { ref, onBeforeUnmount } from 'vue'
-import CodeBlock from './CodeBlock.vue'
+import { ref } from 'vue'
+import { storeToRefs } from 'pinia'
 import TerminalOutput from './TerminalOutput.vue'
 import ScriptParamForm from './ScriptParamForm.vue'
 import ActiveServers from './ActiveServers.vue'
 import { scripts } from '../data/scripts.js'
+import { useScriptsStore } from '../stores/scripts.js'
 
-const selected = ref(scripts[0])
-
-// Run state
-const sseUrl = ref(null)
-const isRunning = ref(false)
-
-// Holds the latest { args, env } emitted by ScriptParamForm
-const paramArgs = ref({ args: '', env: '' })
+const store = useScriptsStore()
+const { selected, sseUrl, isRunning } = storeToRefs(store)
 
 // Ref to the ScriptParamForm component for calling reset()
 const paramFormRef = ref(null)
-
-function onParamUpdate(val) {
-  paramArgs.value = val
-}
-
-function select(script) {
-  selected.value = script
-  sseUrl.value = null
-  isRunning.value = false
-  paramArgs.value = { args: '', env: '' }
-}
-
-function buildSseUrl() {
-  // Combine env vars and CLI args into a single args string for the SSE endpoint.
-  // The server passes them verbatim as shell arguments, so we prepend env assignments.
-  const combined = [paramArgs.value.env, paramArgs.value.args].filter(Boolean).join(' ').trim()
-  const parts = combined.split(/\s+/).filter(Boolean)
-  const qs = new URLSearchParams()
-  parts.forEach(a => qs.append('arg', a))
-  const qStr = qs.toString()
-  return `/api/scripts/${selected.value.id}/run${qStr ? '?' + qStr : ''}`
-}
-
-function runScript() {
-  if (isRunning.value) return
-  isRunning.value = true
-  sseUrl.value = buildSseUrl()
-}
-
-function onDone() {
-  isRunning.value = false
-  sseUrl.value = null
-}
-
-function onError() {
-  isRunning.value = false
-  sseUrl.value = null
-}
-
-onBeforeUnmount(() => {
-  sseUrl.value = null
-})
 </script>
 
 <template>
@@ -66,44 +19,6 @@ onBeforeUnmount(() => {
 
     <!-- ── Left sidebar: script list ──────────────────────────────── -->
     <aside class="w-64 shrink-0 border-r border-gray-100 bg-white overflow-y-auto flex flex-col">
-      <!-- Main nav -->
-      <div class="px-2 pt-4 pb-3 border-b border-gray-100">
-        <router-link
-          to="/models"
-          class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all mb-1 text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-        >
-          <div class="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center shrink-0">
-            <svg class="w-4 h-4 text-violet-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
-              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" stroke-linecap="round" stroke-linejoin="round"/>
-              <polyline points="7 10 12 15 17 10" stroke-linecap="round" stroke-linejoin="round"/>
-              <line x1="12" y1="15" x2="12" y2="3" stroke-linecap="round"/>
-            </svg>
-          </div>
-          <div class="min-w-0">
-            <p class="text-sm font-medium">Models</p>
-            <p class="text-xs text-gray-400">Download</p>
-          </div>
-        </router-link>
-
-        <router-link
-          to="/docs"
-          class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-        >
-          <div class="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
-            <svg class="w-4 h-4 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
-              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke-linecap="round" stroke-linejoin="round"/>
-              <polyline points="14 2 14 8 20 8" stroke-linecap="round" stroke-linejoin="round"/>
-              <line x1="16" y1="13" x2="8" y2="13" stroke-linecap="round"/>
-              <line x1="16" y1="17" x2="8" y2="17" stroke-linecap="round"/>
-              <polyline points="10 9 9 9 8 9" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </div>
-          <div class="min-w-0">
-            <p class="text-sm font-medium">Docs</p>
-            <p class="text-xs text-gray-400">Reference</p>
-          </div>
-        </router-link>
-      </div>
 
       <div class="px-4 pt-4 pb-3">
         <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Scripts</p>
@@ -113,7 +28,7 @@ onBeforeUnmount(() => {
         <button
           v-for="script in scripts"
           :key="script.id"
-          @click="select(script)"
+          @click="store.selectScript(script)"
           class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all group"
           :class="selected?.id === script.id
             ? 'bg-mint-50 text-mint-700'
@@ -194,13 +109,13 @@ onBeforeUnmount(() => {
               :params="selected.params || []"
               :scriptId="selected.id"
               :disabled="isRunning"
-              @update:args="onParamUpdate"
+              @update:args="store.paramArgs = $event"
             />
           </div>
 
           <!-- Run button -->
           <button
-            @click="runScript"
+            @click="store.runScript()"
             :disabled="isRunning"
             class="w-full py-2.5 rounded-xl font-medium text-sm transition-all"
             :class="isRunning
@@ -220,8 +135,8 @@ onBeforeUnmount(() => {
           <!-- Terminal -->
           <TerminalOutput
             :url="sseUrl"
-            @done="onDone"
-            @error="onError"
+            @done="store.onDone()"
+            @error="store.onError()"
           />
         </div>
 

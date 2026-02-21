@@ -1,191 +1,31 @@
 <script setup>
-import { ref, onMounted } from "vue";
-import {
-  searchHFModels,
-  getHFModelFiles,
-  getLocalModels,
-  modelDownloadUrl,
-  cancelModelDownload,
-} from "../api.js";
+import { storeToRefs } from 'pinia'
+import { onMounted } from 'vue'
+import { useModelsStore } from '../stores/models.js'
 
-// ── State ──────────────────────────────────────────────────────────────────
+const store = useModelsStore()
+const {
+  hfToken,
+  query, searching, searchError, results,
+  expandedModel, variants, loadingFiles, filesError,
+  localModels, modelsDir, loadingLocal,
+  downloads,
+} = storeToRefs(store)
 
-const hfToken = ref("");
-const query = ref("");
-const searching = ref(false);
-const searchError = ref("");
-const results = ref([]);
-
-const expandedModel = ref(null);
-const variants = ref([]); // grouped quant variants for expanded model
-const loadingFiles = ref(false);
-const filesError = ref("");
-
-const localModels = ref([]);
-const modelsDir = ref("");
-const loadingLocal = ref(false);
-
-// active downloads: key = `modelId::label`
-const downloads = ref({});
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-function dlKey(modelId, label) {
-  return `${modelId}::${label}`;
-}
+onMounted(store.refreshLocal)
 
 function fmtBytes(bytes) {
-  if (!bytes) return "?";
-  if (bytes < 1024 ** 2) return (bytes / 1024).toFixed(1) + " KB";
-  if (bytes < 1024 ** 3) return (bytes / 1024 ** 2).toFixed(1) + " MB";
-  return (bytes / 1024 ** 3).toFixed(2) + " GB";
+  if (!bytes) return '?'
+  if (bytes < 1024 ** 2) return (bytes / 1024).toFixed(1) + ' KB'
+  if (bytes < 1024 ** 3) return (bytes / 1024 ** 2).toFixed(1) + ' MB'
+  return (bytes / 1024 ** 3).toFixed(2) + ' GB'
 }
 
-// Quant quality tiers for badge colour
 function quantTier(quant) {
-  const q = (quant || "").toUpperCase();
-  if (/^(Q8|Q6|F16|BF16|F32)/.test(q)) return "high";
-  if (/^(Q5|Q4_K_M|Q4_K_L|IQ4)/.test(q)) return "mid";
-  return "low";
-}
-
-// ── Local models ───────────────────────────────────────────────────────────
-
-async function refreshLocal() {
-  loadingLocal.value = true;
-  try {
-    const data = await getLocalModels();
-
-    console.log("data: ", data);
-
-    localModels.value = data.models || [];
-    modelsDir.value = data.modelsDir || "";
-  } catch {
-    /* non-fatal */
-  }
-  loadingLocal.value = false;
-}
-
-onMounted(refreshLocal);
-
-// ── Search ─────────────────────────────────────────────────────────────────
-
-async function doSearch() {
-  const q = query.value.trim();
-  if (!q) return;
-  searching.value = true;
-  searchError.value = "";
-  results.value = [];
-  expandedModel.value = null;
-  variants.value = [];
-  try {
-    const data = await searchHFModels(q, 20, hfToken.value || undefined);
-    results.value = data.results || [];
-  } catch (e) {
-    searchError.value = e.message;
-  }
-  searching.value = false;
-}
-
-// ── File / variant listing ─────────────────────────────────────────────────
-
-async function toggleVariants(modelId) {
-  if (expandedModel.value === modelId) {
-    expandedModel.value = null;
-    variants.value = [];
-    return;
-  }
-  expandedModel.value = modelId;
-  variants.value = [];
-  filesError.value = "";
-  loadingFiles.value = true;
-  try {
-    const data = await getHFModelFiles(modelId, hfToken.value || undefined);
-    variants.value = data.variants || [];
-  } catch (e) {
-    filesError.value = e.message;
-  }
-  loadingFiles.value = false;
-}
-
-// ── Download ───────────────────────────────────────────────────────────────
-
-function startDownload(modelId, variant) {
-  const key = dlKey(modelId, variant.label);
-  if (downloads.value[key]?.active) return;
-
-  downloads.value[key] = {
-    active: true,
-    percent: 0,
-    downloaded: 0,
-    total: 0,
-    fileIndex: 0,
-    fileTotal: variant.files.length,
-    done: false,
-    error: "",
-  };
-
-  const url = modelDownloadUrl(modelId, variant.files, variant.label);
-  const es = new EventSource(url);
-
-  es.addEventListener("progress", (e) => {
-    const d = JSON.parse(e.data);
-    downloads.value[key] = {
-      ...downloads.value[key],
-      percent: d.percent ?? downloads.value[key].percent,
-      downloaded: d.downloaded ?? downloads.value[key].downloaded,
-      total: d.total ?? downloads.value[key].total,
-      fileIndex: d.fileIndex ?? downloads.value[key].fileIndex,
-      active: true,
-    };
-  });
-
-  es.addEventListener("file-start", (e) => {
-    const d = JSON.parse(e.data);
-    downloads.value[key] = {
-      ...downloads.value[key],
-      fileIndex: d.fileIndex,
-      percent: 0,
-      downloaded: 0,
-      total: 0,
-    };
-  });
-
-  es.addEventListener("done", () => {
-    downloads.value[key] = {
-      ...downloads.value[key],
-      active: false,
-      done: true,
-      percent: 100,
-    };
-    es.close();
-    refreshLocal();
-  });
-
-  es.addEventListener("error", (e) => {
-    let msg = "Download failed";
-    try {
-      msg = JSON.parse(e.data).message;
-    } catch {}
-    downloads.value[key] = {
-      ...downloads.value[key],
-      active: false,
-      error: msg,
-    };
-    es.close();
-  });
-}
-
-async function doCancel(modelId, label) {
-  const key = dlKey(modelId, label);
-  try {
-    await cancelModelDownload(modelId, label);
-  } catch {}
-  downloads.value[key] = {
-    ...downloads.value[key],
-    active: false,
-    error: "Cancelled",
-  };
+  const q = (quant || '').toUpperCase()
+  if (/^(Q8|Q6|F16|BF16|F32)/.test(q)) return 'high'
+  if (/^(Q5|Q4_K_M|Q4_K_L|IQ4)/.test(q)) return 'mid'
+  return 'low'
 }
 </script>
 
@@ -237,7 +77,8 @@ async function doCancel(modelId, label) {
         >
       </label>
       <input
-        v-model="hfToken"
+        :value="hfToken"
+        @input="store.setHfToken($event.target.value)"
         type="password"
         placeholder="hf_..."
         class="w-full px-4 py-2.5 rounded-xl border border-gray-200 font-mono text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition-all"
@@ -256,10 +97,10 @@ async function doCancel(modelId, label) {
           type="text"
           placeholder="e.g. Llama-3, Mistral, Gemma..."
           class="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition-all"
-          @keydown.enter="doSearch"
+          @keydown.enter="store.doSearch"
         />
         <button
-          @click="doSearch"
+          @click="store.doSearch"
           :disabled="searching || !query.trim()"
           class="px-5 py-2.5 rounded-xl text-sm font-medium transition-all"
           :class="
@@ -295,7 +136,7 @@ async function doCancel(modelId, label) {
       >
         <!-- Model row header -->
         <button
-          @click="toggleVariants(model.id)"
+          @click="store.toggleVariants(model.id)"
           class="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
         >
           <div class="flex-1 min-w-0">
@@ -386,9 +227,9 @@ async function doCancel(modelId, label) {
               </div>
 
               <!-- Download state -->
-              <template v-if="downloads[dlKey(model.id, variant.label)]">
+              <template v-if="downloads[store.dlKey(model.id, variant.label)]">
                 <!-- Done -->
-                <template v-if="downloads[dlKey(model.id, variant.label)].done">
+                <template v-if="downloads[store.dlKey(model.id, variant.label)].done">
                   <span
                     class="text-xs text-emerald-600 font-medium flex items-center gap-1 shrink-0"
                   >
@@ -410,14 +251,14 @@ async function doCancel(modelId, label) {
                 </template>
                 <!-- Error -->
                 <template
-                  v-else-if="downloads[dlKey(model.id, variant.label)].error"
+                  v-else-if="downloads[store.dlKey(model.id, variant.label)].error"
                 >
                   <div class="flex items-center gap-2 shrink-0">
                     <span class="text-xs text-red-500 max-w-[12rem] truncate">{{
-                      downloads[dlKey(model.id, variant.label)].error
+                      downloads[store.dlKey(model.id, variant.label)].error
                     }}</span>
                     <button
-                      @click="startDownload(model.id, variant)"
+                      @click="store.startDownload(model.id, variant)"
                       class="text-xs text-violet-600 hover:underline"
                     >
                       Retry
@@ -426,7 +267,7 @@ async function doCancel(modelId, label) {
                 </template>
                 <!-- Active -->
                 <template
-                  v-else-if="downloads[dlKey(model.id, variant.label)].active"
+                  v-else-if="downloads[store.dlKey(model.id, variant.label)].active"
                 >
                   <div class="flex flex-col gap-1 min-w-0 w-48 shrink-0">
                     <!-- Shard counter if multi-shard -->
@@ -437,7 +278,7 @@ async function doCancel(modelId, label) {
                         <span v-if="variant.sharded">
                           Shard
                           {{
-                            downloads[dlKey(model.id, variant.label)]
+                            downloads[store.dlKey(model.id, variant.label)]
                               .fileIndex + 1
                           }}
                           / {{ variant.files.length }} ·
@@ -445,19 +286,19 @@ async function doCancel(modelId, label) {
                         <span class="tabular-nums">
                           {{
                             fmtBytes(
-                              downloads[dlKey(model.id, variant.label)]
+                              downloads[store.dlKey(model.id, variant.label)]
                                 .downloaded,
                             )
                           }}
                           <span
                             v-if="
-                              downloads[dlKey(model.id, variant.label)].total
+                              downloads[store.dlKey(model.id, variant.label)].total
                             "
                           >
                             /
                             {{
                               fmtBytes(
-                                downloads[dlKey(model.id, variant.label)].total,
+                                downloads[store.dlKey(model.id, variant.label)].total,
                               )
                             }}
                           </span>
@@ -466,15 +307,15 @@ async function doCancel(modelId, label) {
                       <div class="flex items-center gap-2">
                         <span class="tabular-nums">
                           {{
-                            downloads[dlKey(model.id, variant.label)].percent !=
+                            downloads[store.dlKey(model.id, variant.label)].percent !=
                             null
-                              ? downloads[dlKey(model.id, variant.label)]
-                                  .percent + "%"
-                              : "…"
+                              ? downloads[store.dlKey(model.id, variant.label)]
+                                  .percent + '%'
+                              : '…'
                           }}
                         </span>
                         <button
-                          @click="doCancel(model.id, variant.label)"
+                          @click="store.doCancel(model.id, variant.label)"
                           class="text-red-400 hover:text-red-600 transition-colors"
                         >
                           Cancel
@@ -487,7 +328,7 @@ async function doCancel(modelId, label) {
                         class="h-full bg-violet-500 transition-all duration-300"
                         :style="{
                           width:
-                            (downloads[dlKey(model.id, variant.label)]
+                            (downloads[store.dlKey(model.id, variant.label)]
                               .percent ?? 0) + '%',
                         }"
                       ></div>
@@ -498,7 +339,7 @@ async function doCancel(modelId, label) {
               <!-- Not started -->
               <template v-else>
                 <button
-                  @click="startDownload(model.id, variant)"
+                  @click="store.startDownload(model.id, variant)"
                   class="px-3 py-1.5 rounded-lg bg-violet-500 hover:bg-violet-600 text-white text-xs font-medium transition-colors shrink-0"
                 >
                   Download
@@ -524,7 +365,7 @@ async function doCancel(modelId, label) {
           </p>
         </div>
         <button
-          @click="refreshLocal"
+          @click="store.refreshLocal"
           class="text-xs text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-1"
         >
           <svg
