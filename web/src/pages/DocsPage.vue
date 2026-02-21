@@ -1,15 +1,12 @@
 <script setup>
 import { ref } from 'vue'
 import CodeBlock from '../components/CodeBlock.vue'
+import { scripts } from '../data/scripts.js'
 
 const sections = [
   { id: 'overview', label: 'Overview' },
   { id: 'quickstart', label: 'Quick Start' },
-  { id: 'install', label: 'Installation' },
-  { id: 'compile', label: 'Compilation' },
-  { id: 'launch', label: 'Launch & Server' },
-  { id: 'manage', label: 'Management' },
-  { id: 'terminate', label: 'Terminate' },
+  { id: 'scripts', label: 'All Scripts' },
   { id: 'troubleshoot', label: 'Troubleshooting' },
 ]
 
@@ -154,126 +151,122 @@ const extDocs = [
           </div>
         </section>
 
-        <!-- Installation -->
-        <section id="install">
-          <h2 class="text-2xl font-bold text-gray-900 mb-4">Installation</h2>
-          <p class="text-gray-600 mb-6">The installation script detects your platform and hardware, checks for required dependencies, builds from source, and installs to your home directory. No sudo required.</p>
-          <CodeBlock code="# Standard install (no sudo needed)
-./scripts/install/install-lamacpp.sh
+        <!-- All Scripts -->
+        <section id="scripts">
+          <h2 class="text-2xl font-bold text-gray-900 mb-6">All Scripts Reference</h2>
+          <p class="text-gray-600 mb-8">Complete documentation for all available scripts in the management suite.</p>
 
-# Custom install directory
-INSTALL_DIR=~/llama ./scripts/install/install-lamacpp.sh
+          <div class="space-y-12">
+            <div
+              v-for="script in scripts"
+              :key="script.id"
+              class="border border-gray-100 rounded-2xl overflow-hidden bg-white"
+            >
+              <!-- Script header -->
+              <div class="px-6 py-5 border-b border-gray-100 flex items-start gap-4" :class="script.iconBg + '/10'">
+                <div class="w-12 h-12 rounded-xl flex items-center justify-center shrink-0" :class="script.iconBg">
+                  <component :is="script.icon" class="w-6 h-6" :class="script.iconColor" />
+                </div>
+                <div class="flex-1 min-w-0">
+                  <h3 class="text-xl font-bold text-gray-900">{{ script.name }}</h3>
+                  <p class="text-sm text-gray-500 font-mono mt-1">{{ script.file }}</p>
+                  <p class="text-sm text-gray-600 mt-2">{{ script.description }}</p>
+                </div>
+              </div>
 
-# Default installed paths:
-# Binaries: ~/.local/llama-cpp/bin/
-# Symlinks: ~/.local/bin/llama-server
-# Config:   ~/.local/llama-cpp/config/default.yaml
-# Models:   ~/.local/llama-cpp/models/
-# Logs:     ~/.local/llama-cpp/logs/" lang="bash" />
+              <!-- Script body -->
+              <div class="px-6 py-5 space-y-6">
+                <!-- Long description -->
+                <div>
+                  <p class="text-sm text-gray-600 leading-relaxed">{{ script.longDescription }}</p>
+                </div>
 
-          <div class="mt-6 grid sm:grid-cols-2 gap-4">
-            <div v-for="plat in ['Ubuntu/Debian (apt)', 'Fedora/RHEL (dnf)', 'Arch/Manjaro (pacman)', 'macOS (Homebrew)']" :key="plat" class="flex items-center gap-2 text-sm bg-white border border-gray-100 rounded-lg px-4 py-3">
-              <svg class="w-4 h-4 text-mint-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <polyline points="20 6 9 17 4 12" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              <span class="text-gray-600">{{ plat }}</span>
+                <!-- Badges -->
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span
+                    class="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full"
+                    :class="script.requiresRoot
+                      ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                      : 'bg-mint-50 text-mint-700 border border-mint-200'"
+                  >
+                    {{ script.requiresRoot ? 'Requires sudo' : 'No root needed' }}
+                  </span>
+                  <span
+                    v-for="tag in script.tags"
+                    :key="tag"
+                    class="text-xs font-medium px-2.5 py-1 rounded-full bg-gray-50 text-gray-500 border border-gray-100"
+                  >{{ tag }}</span>
+                </div>
+
+                <!-- Features -->
+                <div v-if="script.features && script.features.length">
+                  <h4 class="text-sm font-semibold text-gray-700 mb-3">Features</h4>
+                  <ul class="space-y-2">
+                    <li
+                      v-for="feat in script.features"
+                      :key="feat"
+                      class="flex items-start gap-2 text-sm text-gray-600"
+                    >
+                      <svg class="w-4 h-4 text-mint-500 mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <polyline points="20 6 9 17 4 12" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                      {{ feat }}
+                    </li>
+                  </ul>
+                </div>
+
+                <!-- Usage -->
+                <div>
+                  <h4 class="text-sm font-semibold text-gray-700 mb-3">Usage</h4>
+                  <CodeBlock :code="script.usage" lang="bash" />
+                </div>
+
+                <!-- Examples -->
+                <div v-if="script.examples && script.examples.length">
+                  <h4 class="text-sm font-semibold text-gray-700 mb-3">Examples</h4>
+                  <div class="space-y-3">
+                    <div v-for="ex in script.examples" :key="ex.label">
+                      <p class="text-xs text-gray-500 mb-1.5">{{ ex.label }}</p>
+                      <CodeBlock :code="ex.code" lang="bash" />
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Options (if available) -->
+                <div v-if="script.options && script.options.length">
+                  <h4 class="text-sm font-semibold text-gray-700 mb-3">Options</h4>
+                  <div class="rounded-xl border border-gray-100 overflow-hidden">
+                    <div
+                      v-for="(opt, i) in script.options"
+                      :key="opt.flag"
+                      class="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4 px-4 py-3 text-sm"
+                      :class="i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'"
+                    >
+                      <code class="text-gray-700 font-mono text-xs bg-gray-100 px-2 py-1 rounded shrink-0">{{ opt.flag }}</code>
+                      <span class="text-gray-600">{{ opt.desc }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Environment Variables -->
+                <div v-if="script.env && script.env.length">
+                  <h4 class="text-sm font-semibold text-gray-700 mb-3">Environment Variables</h4>
+                  <div class="rounded-xl border border-gray-100 overflow-hidden">
+                    <div
+                      v-for="(v, i) in script.env"
+                      :key="v.name"
+                      class="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4 px-4 py-3 text-sm"
+                      :class="i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'"
+                    >
+                      <code class="text-gray-700 font-mono text-xs bg-gray-100 px-2 py-1 rounded shrink-0">{{ v.name }}</code>
+                      <span class="text-gray-500 text-xs">default: <code class="text-mint-700">{{ v.default }}</code></span>
+                      <span class="text-gray-600 sm:ml-auto">{{ v.desc }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        </section>
-
-        <!-- Compilation -->
-        <section id="compile">
-          <h2 class="text-2xl font-bold text-gray-900 mb-4">Compilation</h2>
-          <p class="text-gray-600 mb-6">For advanced control over backends and optimizations, use the interactive compile script. It presents a menu for selecting backends and asks about CUDA Unified Memory, CPU optimizations, BLAS vendor, and more.</p>
-          <CodeBlock code="# Interactive compilation
-./scripts/compile/compile-lamacpp.sh
-
-# Backends you can choose from:
-# [1] All backends (CUDA + ROCm + Vulkan + Metal)
-# [2] CPU only
-# [3] CUDA (Nvidia GPU)
-# [4] ROCm (AMD GPU)
-# [5] Vulkan (cross-platform)
-# [6] Metal (Apple Silicon)
-# [7] Custom CMake flags" lang="bash" />
-
-          <div class="mt-6 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-            <strong>Tip:</strong> Enable CUDA Unified Memory during compilation with
-            <code class="font-mono bg-amber-100 px-1 rounded">-DGGML_CUDA_ENABLE_UNIFIED_MEMORY=ON</code> to run models larger than your VRAM, or enable it at runtime with <code class="font-mono bg-amber-100 px-1 rounded">--unified-memory</code>.
-          </div>
-        </section>
-
-        <!-- Launch -->
-        <section id="launch">
-          <h2 class="text-2xl font-bold text-gray-900 mb-4">Launch & Server</h2>
-          <p class="text-gray-600 mb-6">The launch script supports the full llama-server API with ergonomic defaults and background modes.</p>
-          <div class="space-y-4">
-            <div>
-              <p class="text-xs text-gray-400 mb-2">Local model</p>
-              <CodeBlock code="./scripts/launch/launch-lamacpp.sh \
-  --model /opt/llama-cpp/models/model.Q4_K_M.gguf \
-  --ngl 99 \
-  --port 8080" lang="bash" />
-            </div>
-            <div>
-              <p class="text-xs text-gray-400 mb-2">HuggingFace download</p>
-              <CodeBlock code="./scripts/launch/launch-lamacpp.sh \
-  --hf bartowski/Llama-3.2-3B-Instruct-GGUF \
-  --port 8080" lang="bash" />
-            </div>
-            <div>
-              <p class="text-xs text-gray-400 mb-2">Daemon mode with Unified Memory</p>
-              <CodeBlock code="./scripts/launch/launch-lamacpp.sh \
-  --model model.gguf \
-  --ngl 99 \
-  --unified-memory \
-  --daemon" lang="bash" />
-            </div>
-            <div>
-              <p class="text-xs text-gray-400 mb-2">Server API (once running)</p>
-              <CodeBlock :code="serverApiExample" lang="bash" />
-            </div>
-          </div>
-        </section>
-
-        <!-- Management -->
-        <section id="manage">
-          <h2 class="text-2xl font-bold text-gray-900 mb-4">Management</h2>
-          <CodeBlock code="# Check status
-./scripts/manage/manage-lamacpp.sh status
-
-# View logs
-./scripts/manage/manage-lamacpp.sh logs
-
-# Real-time monitoring
-./scripts/manage/manage-lamacpp.sh monitor
-
-# Stop server
-./scripts/manage/manage-lamacpp.sh stop
-
-# Restart
-./scripts/manage/manage-lamacpp.sh restart
-
-# List all processes
-./scripts/manage/manage-lamacpp.sh list" lang="bash" />
-        </section>
-
-        <!-- Terminate -->
-        <section id="terminate">
-          <h2 class="text-2xl font-bold text-gray-900 mb-4">Terminate & Cleanup</h2>
-          <p class="text-gray-600 mb-4">The terminate script kills all llama-server processes and frees GPU memory. Useful after testing or when you need to reclaim VRAM.</p>
-          <CodeBlock code="# Full cleanup (requires sudo for GPU reset and cache clear)
-sudo ./scripts/terminate/terminate-lamacpp.sh
-
-# What it does:
-# 1. SIGTERM to all llama-server PIDs
-# 2. Wait 5 seconds for graceful shutdown
-# 3. SIGKILL any remaining processes
-# 4. nvidia-smi -r (reset Nvidia GPU memory)
-# 5. rocm-smi (reset AMD GPU state)
-# 6. echo 3 > /proc/sys/vm/drop_caches (Linux cache clear)
-# 7. Remove /tmp/llama-server.pid
-# 8. Clean old log files (>7 days)" lang="bash" />
         </section>
 
         <!-- Troubleshooting -->
