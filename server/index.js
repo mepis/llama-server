@@ -8,6 +8,7 @@ const scriptsRouter = require("./routes/scripts");
 const statusRouter = require("./routes/status");
 const logsRouter = require("./routes/logs");
 const processesRouter = require("./routes/processes");
+const instancesRouter = require("./routes/instances");
 const hardwareRouter = require("./routes/hardware");
 const modelsRouter = require("./routes/models");
 const { shutdown: shutdownScripts } = require("./lib/scriptRunner");
@@ -32,6 +33,7 @@ app.use("/api/scripts", scriptsRouter);
 app.use("/api/status", statusRouter);
 app.use("/api/logs", logsRouter);
 app.use("/api/processes", processesRouter);
+app.use("/api/instances", instancesRouter);
 app.use("/api/hardware", hardwareRouter);
 app.use("/api/models", modelsRouter);
 

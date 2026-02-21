@@ -16,9 +16,10 @@ NC='\033[0m' # No Color
 CONFIG_DIR="${CONFIG_DIR:-$HOME/.local/llama-cpp/config}"
 MODELS_DIR="${MODELS_DIR:-$HOME/.local/llama-cpp/models}"
 LOG_DIR="${LOG_DIR:-$HOME/.local/llama-cpp/logs}"
-PID_FILE="${PID_FILE:-/tmp/llama-server.pid}"
+INSTANCES_DIR="${INSTANCES_DIR:-$HOME/.local/llama-cpp/instances}"
 PORT="${PORT:-8080}"
 HOST="${HOST:-0.0.0.0}"
+INSTANCE_NAME="${INSTANCE_NAME:-default}"
 
 # Functions
 log() {
@@ -110,6 +111,10 @@ parse_arguments() {
                 NO_WEBUI=1
                 shift
                 ;;
+            --name|-n)
+                INSTANCE_NAME="$2"
+                shift 2
+                ;;
             --list-devices|-l)
                 LIST_DEVICES=1
                 shift
@@ -148,6 +153,8 @@ show_help() {
     echo "  --daemon, -D           Run as daemon (background process)"
     echo "  --background, -b      Run in background (alternative to --daemon)"
     echo "  --no-gpu, -ng          Disable GPU acceleration"
+    echo "  --no-webui             Disable built-in web interface"
+    echo "  --name, -n NAME        Instance name (for running multiple servers)"
     echo "  --list-devices, -l    List available devices"
     echo "  --version, -v         Show version information"
     echo "  --help, -h             Show this help message"
@@ -401,13 +408,33 @@ build_command() {
 execute_command() {
     local cmd="$1"
 
-    # Create log directory
+    # Create directories
     mkdir -p "$LOG_DIR"
+    mkdir -p "$INSTANCES_DIR"
+
+    # Check if instance name is already running
+    local pid_file="$INSTANCES_DIR/${INSTANCE_NAME}.pid"
+    if [ -f "$pid_file" ]; then
+        local existing_pid=$(cat "$pid_file")
+        if ps -p "$existing_pid" > /dev/null 2>&1; then
+            error "Instance '$INSTANCE_NAME' is already running with PID $existing_pid. Use --name to specify a different instance."
+        else
+            warning "Removing stale PID file for instance '$INSTANCE_NAME'"
+            rm -f "$pid_file"
+        fi
+    fi
+
+    # Check if port is already in use
+    if command -v lsof &> /dev/null; then
+        if lsof -Pi :${PORT} -sTCP:LISTEN -t >/dev/null 2>&1; then
+            error "Port ${PORT} is already in use. Please choose a different port with --port"
+        fi
+    fi
 
     # Set log file
-    local log_file="$LOG_DIR/llama-server-$(date +%Y%m%d_%H%M%S).log"
+    local log_file="$LOG_DIR/llama-server-${INSTANCE_NAME}-$(date +%Y%m%d_%H%M%S).log"
 
-    log "Starting server..."
+    log "Starting server instance: $INSTANCE_NAME"
     log "Log file: $log_file"
     log "PID: $$"
 
@@ -415,13 +442,47 @@ execute_command() {
     if [ "$DAEMON" = "1" ]; then
         nohup $cmd > "$log_file" 2>&1 &
         local pid=$!
-        echo $pid > "$PID_FILE"
+        echo $pid > "$pid_file"
+
+        # Save instance metadata
+        cat > "$INSTANCES_DIR/${INSTANCE_NAME}.json" <<EOF
+{
+  "name": "$INSTANCE_NAME",
+  "pid": $pid,
+  "port": $PORT,
+  "host": "$HOST",
+  "model": "${MODEL_PATH:-${MODEL_NAME:-unknown}}",
+  "log_file": "$log_file",
+  "started_at": "$(date -Iseconds)",
+  "ngl": "${NGL:-99}",
+  "context": "${CONTEXT_SIZE:-2048}"
+}
+EOF
         log "Server started in daemon mode with PID: $pid"
+        log "Instance name: $INSTANCE_NAME"
+        log "Port: $PORT"
     elif [ "$BACKGROUND" = "1" ]; then
         $cmd > "$log_file" 2>&1 &
         local pid=$!
-        echo $pid > "$PID_FILE"
+        echo $pid > "$pid_file"
+
+        # Save instance metadata
+        cat > "$INSTANCES_DIR/${INSTANCE_NAME}.json" <<EOF
+{
+  "name": "$INSTANCE_NAME",
+  "pid": $pid,
+  "port": $PORT,
+  "host": "$HOST",
+  "model": "${MODEL_PATH:-${MODEL_NAME:-unknown}}",
+  "log_file": "$log_file",
+  "started_at": "$(date -Iseconds)",
+  "ngl": "${NGL:-99}",
+  "context": "${CONTEXT_SIZE:-2048}"
+}
+EOF
         log "Server started in background with PID: $pid"
+        log "Instance name: $INSTANCE_NAME"
+        log "Port: $PORT"
     else
         $cmd
     fi

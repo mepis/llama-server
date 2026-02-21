@@ -267,6 +267,7 @@ export const scripts = [
       { id: '--daemon',         label: 'Daemon mode',      type: 'flag',     desc: 'Run as a background daemon (nohup)' },
       { id: '--no-gpu',         label: 'No GPU',           type: 'flag',     desc: 'Disable GPU acceleration entirely' },
       { id: '--no-webui',       label: 'Disable Web UI',   type: 'flag',     desc: 'Disable the built-in llama.cpp web interface (enabled by default)' },
+      { id: '--name',           label: 'Instance name',    type: 'text',     placeholder: 'default', desc: 'Unique name for this server instance (allows running multiple servers)' },
       { id: '--download-only',  label: 'Download only',    type: 'flag',     desc: 'Download model via --hf without starting server' },
     ],
     options: [

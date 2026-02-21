@@ -4,6 +4,7 @@ import CodeBlock from './CodeBlock.vue'
 import TerminalOutput from './TerminalOutput.vue'
 import ScriptParamForm from './ScriptParamForm.vue'
 import ModelDownloader from './ModelDownloader.vue'
+import ActiveServers from './ActiveServers.vue'
 import { scripts } from '../data/scripts.js'
 
 // 'models' is a sentinel value meaning the downloader panel is active
@@ -344,6 +345,9 @@ onBeforeUnmount(() => {
             </span>
             <span v-else>Run {{ selected.name }}</span>
           </button>
+
+          <!-- Active servers list (only for launch script) -->
+          <ActiveServers v-if="selected.id === 'launch'" class="mt-4" />
 
           <!-- Terminal -->
           <TerminalOutput
