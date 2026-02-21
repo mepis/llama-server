@@ -383,11 +383,6 @@ build_command() {
         cmd="$cmd -b $BATCH_SIZE"
     fi
 
-    # Unified Memory is controlled via environment variable (not a server flag)
-    if [ -n "$UNIFIED_MEMORY" ]; then
-        export GGML_CUDA_ENABLE_UNIFIED_MEMORY=1
-    fi
-
     if [ "$NO_GPU" = "1" ]; then
         cmd="$cmd -ngl 0"
     fi
@@ -544,6 +539,13 @@ main() {
 
     # Parse arguments
     parse_arguments "$@"
+
+    # Unified Memory is controlled via environment variable, not a server flag.
+    # Must be exported here (not inside build_command) so the child process inherits it.
+    if [ -n "$UNIFIED_MEMORY" ]; then
+        export GGML_CUDA_ENABLE_UNIFIED_MEMORY=1
+        log "CUDA Unified Memory enabled (GGML_CUDA_ENABLE_UNIFIED_MEMORY=1)"
+    fi
 
     # Show version if requested
     if [ "$VERSION" = "1" ]; then
