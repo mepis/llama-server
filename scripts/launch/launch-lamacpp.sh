@@ -106,6 +106,10 @@ parse_arguments() {
                 NO_GPU=1
                 shift
                 ;;
+            --no-webui)
+                NO_WEBUI=1
+                shift
+                ;;
             --list-devices|-l)
                 LIST_DEVICES=1
                 shift
@@ -383,6 +387,10 @@ build_command() {
 
     if [ "$NO_GPU" = "1" ]; then
         cmd="$cmd -ngl 0"
+    fi
+
+    if [ "$NO_WEBUI" = "1" ]; then
+        cmd="$cmd --no-webui"
     fi
 
     # Set environment variables
