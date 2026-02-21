@@ -6,6 +6,7 @@ import { scripts } from '../data/scripts.js'
 const sections = [
   { id: 'overview', label: 'Overview' },
   { id: 'quickstart', label: 'Quick Start' },
+  { id: 'hardware', label: 'Hardware' },
   { id: 'scripts', label: 'All Scripts' },
   { id: 'troubleshoot', label: 'Troubleshooting' },
 ]
@@ -62,6 +63,24 @@ const extDocs = [
   { title: 'BLIS Backend', href: 'https://github.com/ggml-org/llama.cpp/blob/master/docs/backend/BLIS.md', desc: 'BLIS BLAS library integration' },
   { title: 'SYCL Backend', href: 'https://github.com/ggml-org/llama.cpp/blob/master/docs/backend/SYCL.md', desc: 'Intel SYCL backend for oneAPI' },
   { title: 'GGUF Model Hub', href: 'https://huggingface.co/models?library=gguf', desc: 'HuggingFace GGUF model repository' },
+]
+
+const backends = [
+  { name: 'Nvidia CUDA', cmake: '-DGGML_CUDA=ON', desc: 'Best-in-class GPU acceleration with Unified Memory support', color: 'bg-green-50 text-green-700 border-green-200' },
+  { name: 'AMD ROCm', cmake: '-DGGML_HIP=ON', desc: 'AMD GPU acceleration via ROCm/HIP', color: 'bg-red-50 text-red-700 border-red-200' },
+  { name: 'Vulkan', cmake: '-DGGML_VULKAN=ON', desc: 'Cross-platform GPU (Nvidia, AMD, Intel)', color: 'bg-purple-50 text-purple-700 border-purple-200' },
+  { name: 'Apple Metal', cmake: '-DGGML_METAL=ON', desc: 'Apple Silicon GPU with unified memory', color: 'bg-gray-50 text-gray-700 border-gray-200' },
+  { name: 'CPU (BLAS)', cmake: '-DGGML_BLAS=ON -DGGML_NATIVE=ON', desc: 'Optimized CPU via AVX2/AVX-512/NEON + OpenBLAS', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+  { name: 'Intel oneAPI', cmake: '-DGGML_BLAS_VENDOR=Intel10_64lp', desc: 'Intel GPU and CPU via oneAPI toolkit', color: 'bg-sky-50 text-sky-700 border-sky-200' },
+]
+
+const quantizations = [
+  { q: 'Q8_0', vram: '~8 GB', quality: 'Highest', note: 'Near-lossless' },
+  { q: 'Q6_K', vram: '~6 GB', quality: 'Very High', note: 'Recommended' },
+  { q: 'Q5_K_M', vram: '~5 GB', quality: 'High', note: '' },
+  { q: 'Q4_K_M', vram: '~4 GB', quality: 'Good', note: 'Best balance' },
+  { q: 'Q3_K_M', vram: '~3 GB', quality: 'OK', note: '' },
+  { q: 'Q2_K', vram: '~2 GB', quality: 'Low', note: 'Highly quantized' },
 ]
 </script>
 
@@ -146,6 +165,81 @@ const extDocs = [
               <div class="flex-1">
                 <p class="text-sm font-medium text-gray-700 mb-2">{{ step.label }}</p>
                 <CodeBlock :code="step.code" lang="bash" />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Hardware -->
+        <section id="hardware">
+          <h2 class="text-2xl font-bold text-gray-900 mb-6">Hardware Support</h2>
+          <p class="text-gray-600 mb-8">The installation script auto-detects your hardware and configures the optimal backend. All major GPU vendors are supported.</p>
+
+          <!-- Backends -->
+          <div class="space-y-3 mb-12">
+            <div
+              v-for="backend in backends"
+              :key="backend.name"
+              class="flex items-start gap-4 p-4 rounded-xl border transition-colors"
+              :class="backend.color"
+            >
+              <div class="flex-1">
+                <h3 class="font-semibold text-gray-900 mb-1">{{ backend.name }}</h3>
+                <p class="text-sm text-gray-600 mb-2">{{ backend.desc }}</p>
+                <code class="text-xs font-mono bg-white/50 px-2 py-1 rounded">{{ backend.cmake }}</code>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quantization -->
+          <div>
+            <h3 class="text-xl font-bold text-gray-900 mb-3">Model Quantization</h3>
+            <p class="text-gray-500 mb-6">VRAM requirements for a 7B parameter model. Scale proportionally for larger models.</p>
+
+            <div class="rounded-xl border border-gray-100 overflow-hidden">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="bg-gray-50 border-b border-gray-100">
+                    <th class="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase">Quant</th>
+                    <th class="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase">VRAM (7B)</th>
+                    <th class="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase">Quality</th>
+                    <th class="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase">Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="(row, i) in quantizations"
+                    :key="row.q"
+                    :class="i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'"
+                  >
+                    <td class="px-4 py-3">
+                      <code class="font-mono font-medium text-mint-700 bg-mint-50 px-2 py-0.5 rounded text-xs">{{ row.q }}</code>
+                    </td>
+                    <td class="px-4 py-3 text-gray-700 font-medium">{{ row.vram }}</td>
+                    <td class="px-4 py-3 text-gray-600">{{ row.quality }}</td>
+                    <td class="px-4 py-3">
+                      <span v-if="row.note" class="text-xs bg-mint-50 text-mint-700 px-2 py-0.5 rounded-full">{{ row.note }}</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Unified Memory callout -->
+          <div class="mt-8 bg-gradient-to-br from-mint-50 to-white border border-mint-200 rounded-xl p-6">
+            <div class="flex items-start gap-3">
+              <div class="w-10 h-10 bg-mint-500 rounded-lg flex items-center justify-center shrink-0">
+                <svg class="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+              <div class="flex-1">
+                <h4 class="font-semibold text-gray-900 mb-2">CUDA Unified Memory</h4>
+                <p class="text-sm text-gray-600 mb-3">
+                  Run models larger than your GPU's VRAM using CUDA Unified Virtual Memory. The OS pages between GPU and CPU memory transparently.
+                </p>
+                <CodeBlock code="./scripts/launch/launch-lamacpp.sh --model large-model.gguf --ngl 99 --unified-memory" lang="bash" />
               </div>
             </div>
           </div>

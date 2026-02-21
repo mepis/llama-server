@@ -5,7 +5,6 @@ import App from './App.vue'
 
 import ScriptsPage from './pages/ScriptsPage.vue'
 import ModelsPage from './pages/ModelsPage.vue'
-import HardwarePage from './pages/HardwarePage.vue'
 import DocsPage from './pages/DocsPage.vue'
 
 const router = createRouter({
@@ -13,7 +12,6 @@ const router = createRouter({
   routes: [
     { path: '/', component: ScriptsPage },
     { path: '/models', component: ModelsPage },
-    { path: '/hardware', component: HardwarePage },
     { path: '/docs', component: DocsPage },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
