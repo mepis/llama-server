@@ -3,28 +3,11 @@ import { ref, onBeforeUnmount } from 'vue'
 import CodeBlock from './CodeBlock.vue'
 import TerminalOutput from './TerminalOutput.vue'
 import ScriptParamForm from './ScriptParamForm.vue'
-import ModelDownloader from './ModelDownloader.vue'
 import ActiveServers from './ActiveServers.vue'
 import { scripts } from '../data/scripts.js'
 
-// 'models' is a sentinel value meaning the downloader panel is active
-const MODELS_VIEW = 'models'
-
 const selected = ref(scripts[0])
 const activeTab = ref('docs')
-const view = ref('script') // 'script' | 'models'
-
-function selectScript(script) {
-  view.value = 'script'
-  select(script)
-}
-
-function selectModels() {
-  view.value = MODELS_VIEW
-  selected.value = null
-  sseUrl.value = null
-  isRunning.value = false
-}
 
 // Run state
 const sseUrl = ref(null)
@@ -96,19 +79,19 @@ onBeforeUnmount(() => {
           :key="script.id"
           @click="selectScript(script)"
           class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all group"
-          :class="view === 'script' && selected?.id === script.id
+          :class="selected?.id === script.id
             ? 'bg-mint-50 text-mint-700'
             : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
         >
           <!-- Icon -->
           <div
             class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors"
-            :class="view === 'script' && selected?.id === script.id ? script.iconBg : 'bg-gray-100 group-hover:' + script.iconBg"
+            :class="selected?.id === script.id ? script.iconBg : 'bg-gray-100 group-hover:' + script.iconBg"
           >
             <component
               :is="script.icon"
               class="w-4 h-4 transition-colors"
-              :class="view === 'script' && selected?.id === script.id ? script.iconColor : 'text-gray-400'"
+              :class="selected?.id === script.id ? script.iconColor : 'text-gray-400'"
             />
           </div>
 
@@ -119,45 +102,12 @@ onBeforeUnmount(() => {
         </button>
       </nav>
 
-      <!-- Divider + Models entry -->
-      <div class="px-2 pb-4 border-t border-gray-100 pt-2">
-        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 pt-1 pb-2">Models</p>
-        <button
-          @click="selectModels"
-          class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all group"
-          :class="view === 'models'
-            ? 'bg-violet-50 text-violet-700'
-            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
-        >
-          <div
-            class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors"
-            :class="view === 'models' ? 'bg-violet-100' : 'bg-gray-100 group-hover:bg-violet-100'"
-          >
-            <svg
-              class="w-4 h-4 transition-colors"
-              :class="view === 'models' ? 'text-violet-500' : 'text-gray-400 group-hover:text-violet-500'"
-              viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
-            >
-              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" stroke-linecap="round" stroke-linejoin="round"/>
-              <polyline points="7 10 12 15 17 10" stroke-linecap="round" stroke-linejoin="round"/>
-              <line x1="12" y1="15" x2="12" y2="3" stroke-linecap="round"/>
-            </svg>
-          </div>
-          <div class="min-w-0">
-            <p class="text-sm font-medium truncate leading-tight">Download Models</p>
-            <p class="text-xs text-gray-400 truncate mt-0.5">HuggingFace</p>
-          </div>
-        </button>
-      </div>
     </aside>
 
     <!-- ── Right detail panel ─────────────────────────────────────── -->
     <main class="flex-1 overflow-y-auto bg-white">
 
-      <!-- Model downloader panel -->
-      <ModelDownloader v-if="view === 'models'" />
-
-      <div v-else-if="selected" class="max-w-3xl mx-auto px-8 py-8">
+      <div v-if="selected" class="max-w-3xl mx-auto px-8 py-8">
 
         <!-- Header -->
         <div class="flex items-start gap-4 mb-6">

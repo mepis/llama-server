@@ -8,6 +8,7 @@ const mobileOpen = ref(false)
 
 const navLinks = [
   { to: '/', label: 'Scripts' },
+  { to: '/models', label: 'Models' },
   { to: '/hardware', label: 'Hardware' },
   { to: '/docs', label: 'Docs' },
 ]
