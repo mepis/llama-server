@@ -26,6 +26,11 @@ CUDA_ARCHITECTURES="${CUDA_ARCHITECTURES:-}"
 BUILD_TYPE="${BUILD_TYPE:-Release}"
 BLAS_VENDOR="${BLAS_VENDOR:-OpenBLAS}"
 GGML_NATIVE="${GGML_NATIVE:-ON}"
+# NVIDIA performance tuning (only applied when GPU_BACKEND=cuda or auto-detected CUDA)
+GGML_CUDA_FORCE_MMQ="${GGML_CUDA_FORCE_MMQ:-}"
+GGML_CUDA_FORCE_CUBLAS="${GGML_CUDA_FORCE_CUBLAS:-}"
+GGML_CUDA_PEER_MAX_BATCH_SIZE="${GGML_CUDA_PEER_MAX_BATCH_SIZE:-}"
+GGML_CUDA_FA_ALL_QUANTS="${GGML_CUDA_FA_ALL_QUANTS:-}"
 
 # Functions
 log() {
@@ -215,6 +220,24 @@ build_lamacpp() {
         if [ -n "$cuda_archs" ]; then
             cmake_args="$cmake_args -DCMAKE_CUDA_ARCHITECTURES='$cuda_archs'"
             log "CUDA architectures: $cuda_archs"
+        fi
+
+        # NVIDIA performance tuning options
+        if [ -n "$GGML_CUDA_FORCE_MMQ" ]; then
+            cmake_args="$cmake_args -DGGML_CUDA_FORCE_MMQ=${GGML_CUDA_FORCE_MMQ}"
+            log "CUDA force MMQ: ${GGML_CUDA_FORCE_MMQ}"
+        fi
+        if [ -n "$GGML_CUDA_FORCE_CUBLAS" ]; then
+            cmake_args="$cmake_args -DGGML_CUDA_FORCE_CUBLAS=${GGML_CUDA_FORCE_CUBLAS}"
+            log "CUDA force cuBLAS: ${GGML_CUDA_FORCE_CUBLAS}"
+        fi
+        if [ -n "$GGML_CUDA_PEER_MAX_BATCH_SIZE" ]; then
+            cmake_args="$cmake_args -DGGML_CUDA_PEER_MAX_BATCH_SIZE=${GGML_CUDA_PEER_MAX_BATCH_SIZE}"
+            log "CUDA peer max batch size: ${GGML_CUDA_PEER_MAX_BATCH_SIZE}"
+        fi
+        if [ -n "$GGML_CUDA_FA_ALL_QUANTS" ]; then
+            cmake_args="$cmake_args -DGGML_CUDA_FA_ALL_QUANTS=${GGML_CUDA_FA_ALL_QUANTS}"
+            log "CUDA FA all quants: ${GGML_CUDA_FA_ALL_QUANTS}"
         fi
 
     elif [ "$GPU_BACKEND" = "rocm" ] || { [ "$GPU_BACKEND" = "auto" ] && command -v rocm-smi &> /dev/null && command -v hipconfig &> /dev/null; }; then

@@ -149,6 +149,10 @@ export const scripts = [
       { id: 'BUILD_TYPE',         label: 'Build type',          type: 'select', options: ['Release', 'Debug'],                           envVar: true, desc: 'CMake build type. Release = optimised, Debug = with symbols' },
       { id: 'BLAS_VENDOR',        label: 'BLAS vendor',         type: 'select', options: ['OpenBLAS', 'Intel10_64lp', 'FLAME', 'None'],  envVar: true, desc: 'CPU BLAS library for matrix operations. None = disable BLAS' },
       { id: 'GGML_NATIVE',        label: 'Native CPU opt',      type: 'select', options: ['ON', 'OFF'],                                  envVar: true, desc: 'Optimise for the host CPU (AVX2, AVX-512, NEON). ON = fastest on this machine, OFF = portable binary' },
+      { id: 'GGML_CUDA_FORCE_MMQ',          label: 'Force MMQ kernels',       type: 'select', options: ['ON', 'OFF'], envVar: true, desc: '(CUDA) Force custom matrix multiplication kernels for quantized models instead of cuBLAS. Can improve performance for quantized models' },
+      { id: 'GGML_CUDA_FORCE_CUBLAS',       label: 'Force cuBLAS',            type: 'select', options: ['ON', 'OFF'], envVar: true, desc: '(CUDA) Force FP16 cuBLAS for matrix multiplication. Mutually exclusive with Force MMQ. Better for FP16 models' },
+      { id: 'GGML_CUDA_PEER_MAX_BATCH_SIZE', label: 'Peer max batch size',    type: 'number', placeholder: '128',    envVar: true, desc: '(CUDA) Maximum batch size for peer access between multiple GPUs. Default: 128' },
+      { id: 'GGML_CUDA_FA_ALL_QUANTS',      label: 'FA all quant types',      type: 'select', options: ['ON', 'OFF'], envVar: true, desc: '(CUDA) Compile FlashAttention kernels for all KV cache quantization types. Increases compile time but supports all quant combos' },
     ],
     env: [
       { name: 'INSTALL_DIR', default: '~/.local/llama-cpp', desc: 'Installation directory' },
