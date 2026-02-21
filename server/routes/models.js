@@ -3,6 +3,7 @@
 const express = require('express')
 const router = express.Router()
 const path = require('path')
+const os = require('os')
 const { createSSE } = require('../lib/sse')
 const {
   searchModels,
@@ -12,10 +13,11 @@ const {
   cancelDownload,
   listLocalModels,
 } = require('../lib/huggingface')
-const { ROOT } = require('../lib/scriptRunner')
 
 // Default directory where downloaded models are stored
-const MODELS_DIR = process.env.MODELS_DIR || path.join(ROOT, 'models')
+// Match the launch script's default: ~/.local/llama-cpp/models
+const HOME = os.homedir()
+const MODELS_DIR = process.env.MODELS_DIR || path.join(HOME, '.local', 'llama-cpp', 'models')
 
 // Track active downloads: key = `modelId::filename`, value = ChildProcess
 const activeDownloads = new Map()

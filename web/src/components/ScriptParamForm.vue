@@ -181,15 +181,16 @@ watch([builtArgs, builtEnv], () => {
                 {{ model.filename }}
               </option>
             </select>
-            <div v-if="localModels.length === 0 && !loadingModels" class="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-100">
-              <svg class="w-4 h-4 text-amber-500 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke-linecap="round" stroke-linejoin="round"/>
-                <line x1="12" y1="9" x2="12" y2="13" stroke-linecap="round"/>
-                <circle cx="12" cy="17" r="0.5" fill="currentColor"/>
+            <div v-if="localModels.length === 0 && !loadingModels" class="flex items-start gap-2 px-3 py-2 rounded-lg bg-blue-50 border border-blue-100">
+              <svg class="w-4 h-4 text-blue-500 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10" stroke-linecap="round" stroke-linejoin="round"/>
+                <line x1="12" y1="16" x2="12" y2="12" stroke-linecap="round"/>
+                <circle cx="12" cy="8" r="0.5" fill="currentColor"/>
               </svg>
-              <p class="text-xs text-amber-700 leading-relaxed">
-                No models found. Download models using the "Download Models" section in the sidebar.
-              </p>
+              <div class="text-xs text-blue-700 leading-relaxed">
+                <p class="mb-1">No models found in <span class="font-mono">~/.local/llama-cpp/models</span></p>
+                <p>Download models from the <strong>Models</strong> page or use the <strong>--hf</strong> flag to download during launch.</p>
+              </div>
             </div>
           </div>
         </template>

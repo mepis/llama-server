@@ -22,6 +22,7 @@ const loadingFiles   = ref(false)
 const filesError     = ref('')
 
 const localModels    = ref([])
+const modelsDir      = ref('')
 const loadingLocal   = ref(false)
 
 // active downloads: key = `modelId::label`
@@ -53,6 +54,7 @@ async function refreshLocal() {
   try {
     const data = await getLocalModels()
     localModels.value = data.models || []
+    modelsDir.value = data.modelsDir || ''
   } catch { /* non-fatal */ }
   loadingLocal.value = false
 }
@@ -351,7 +353,10 @@ async function doCancel(modelId, label) {
     <!-- Local models -->
     <div>
       <div class="flex items-center justify-between mb-3">
-        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Local Models</p>
+        <div>
+          <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Local Models</p>
+          <p v-if="modelsDir" class="text-xs text-gray-400 font-mono mt-0.5">{{ modelsDir }}</p>
+        </div>
         <button
           @click="refreshLocal"
           class="text-xs text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-1"
@@ -364,8 +369,15 @@ async function doCancel(modelId, label) {
         </button>
       </div>
 
-      <div v-if="!localModels.length" class="text-sm text-gray-400 italic">
-        No models downloaded yet.
+      <div v-if="!localModels.length" class="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-blue-50 border border-blue-100">
+        <svg class="w-4 h-4 text-blue-500 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" stroke-linecap="round" stroke-linejoin="round"/>
+          <line x1="12" y1="16" x2="12" y2="12" stroke-linecap="round"/>
+          <circle cx="12" cy="8" r="0.5" fill="currentColor"/>
+        </svg>
+        <p class="text-xs text-blue-700 leading-relaxed">
+          No models downloaded yet. Search and download models above, or use the Launch Server script with the --hf flag to download during launch.
+        </p>
       </div>
       <div v-else class="rounded-xl border border-gray-100 overflow-hidden divide-y divide-gray-100">
         <div
